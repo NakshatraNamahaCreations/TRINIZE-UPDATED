@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Trinize Resident",
+    "slug": "trinize-resident",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.trinize.resident"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#7C55F7",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.trinize.resident"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "./plugins/withNewerCmake",
+        {
+          "version": "3.31.6"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 140,
+          "resizeMode": "contain",
+          "backgroundColor": "#7C55F7"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#7C55F7"
+        }
+      ],
+      "expo-localization"
+    ],
+    "scheme": "trinize-resident"
+  }
+}
