@@ -21,3 +21,6 @@ export const CalendarForm = optional<typeof import('expo-calendar/legacy')>(() =
 export const Notifications = optional<typeof import('expo-notifications')>(() => require('expo-notifications'));
 export const Localization = optional<typeof import('expo-localization')>(() => require('expo-localization'));
 export const SplashScreen = optional<typeof import('expo-splash-screen')>(() => require('expo-splash-screen'));
+export const Clipboard = optional<typeof import('expo-clipboard')>(() => require('expo-clipboard'));
+/** encrypted on-device storage (Android Keystore / iOS Keychain) — used for the sign-in state */
+export const SecureStore = optional<typeof import('expo-secure-store')>(() => require('expo-secure-store'));

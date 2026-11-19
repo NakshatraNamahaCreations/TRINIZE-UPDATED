@@ -9,5 +9,5 @@ export const Meta = ({ style, ...rest }: TextProps) => <Txt {...rest} style={[s.
 
 const s = StyleSheet.create({
   txt: { color: C.ink, fontSize: 13.5 },
-  meta: { fontSize: 11, color: C.ink3, lineHeight: 16 },
+  meta: { fontSize: 12, color: C.ink3, lineHeight: 17 },
 });

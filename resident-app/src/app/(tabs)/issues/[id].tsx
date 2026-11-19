@@ -6,6 +6,9 @@ import { useUI } from '@/components/Overlay';
 import { Btn, Card, EmptyState, Header, Icon, Meta, Pill, Row, Screen, Sect, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
 import type { IssueStatus } from '@/store/data';
+import { LIVE } from '@/lib/api';
+import { rateIssueLive } from '@/lib/live';
+import { IssueChat } from '@/components/IssueChat';
 import { useStore } from '@/store/store';
 import { C } from '@/theme';
 
@@ -13,7 +16,7 @@ const STEPS: IssueStatus[] = ['Submitted', 'Acknowledged', 'Assigned', 'In Progr
 
 export default function IssueDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { state } = useStore();
+  const { state, actions } = useStore();
   const { toast } = useUI();
   const { t, tr, tx } = useT();
   const [stars, setStars] = useState(0);
@@ -32,11 +35,11 @@ export default function IssueDetail() {
         <Row>
           <Pill tone={resolved ? 'good' : 'acc'}>{tx('status', i.status)}</Pill>
           <Pill tone="dim">{i.cat}</Pill>
-          <Pill tone={i.pri === 'High' ? 'bad' : i.pri === 'Low' ? 'dim' : 'warn'}>{tx('pri', i.pri)}</Pill>
+          <Pill tone={i.pri === 'High' || i.pri === 'Emergency' ? 'bad' : i.pri === 'Low' ? 'dim' : 'warn'}>{tx('pri', i.pri)}</Pill>
         </Row>
         <Txt w={700} style={{ fontSize: 14, marginTop: 6 }}>{i.title}</Txt>
         <Meta style={{ marginTop: 4 }}>{i.loc} · {t('issues.raised', { when: i.when })} · {i.sla}</Meta>
-        {i.vendor !== '—' && <Meta style={{ marginTop: 2 }}>{tr('issue.assignedTo', { vendor: <Txt w={700} style={{ fontSize: 11 }}>{i.vendor}</Txt> })}</Meta>}
+        {i.vendor !== '—' && <Meta style={{ marginTop: 2 }}>{tr('issue.assignedTo', { vendor: <Txt w={700} style={{ fontSize: 12 }}>{i.vendor}</Txt> })}</Meta>}
       </Card>
 
       <Sect title={t('issue.timeline')} />
@@ -48,8 +51,8 @@ export default function IssueDetail() {
               <View key={idx} style={s.step}>
                 <View style={[s.node, { backgroundColor: done ? C.good : C.acc }, !done && s.nodeCur]} />
                 <Txt w={700} style={{ fontSize: 12 }}>{tx('status', step.s)}</Txt>
-                <Txt style={{ fontSize: 10.5, color: C.ink3 }}>{step.w}</Txt>
-                {step.n && <Txt style={{ fontSize: 11.5, color: C.ink2, marginTop: 2 }}>{step.n}</Txt>}
+                <Txt style={{ fontSize: 12, color: C.ink3 }}>{step.w}</Txt>
+                {step.n && <Txt style={{ fontSize: 12, color: C.ink2, marginTop: 2 }}>{step.n}</Txt>}
               </View>
             );
           })}
@@ -57,7 +60,7 @@ export default function IssueDetail() {
             <View style={s.step}>
               <View style={[s.node, { backgroundColor: '#D6DDE8' }]} />
               <Txt w={700} style={{ fontSize: 12, color: C.ink3 }}>{tx('status', next)}</Txt>
-              <Txt style={{ fontSize: 10.5, color: C.ink3 }}>{t('issue.pending')}</Txt>
+              <Txt style={{ fontSize: 12, color: C.ink3 }}>{t('issue.pending')}</Txt>
             </View>
           )}
         </View>
@@ -68,7 +71,7 @@ export default function IssueDetail() {
               <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
                 {[1, 2, 3, 4, 5].map(n => (
                   <Pressable key={n} hitSlop={4} accessibilityLabel={t('issue.stars', { n })}
-                    onPress={() => { setStars(n); toast(t('issue.thanks'), 'star'); }}>
+                    onPress={() => { setStars(n); if (LIVE) rateIssueLive(i.id, n).catch(() => {}); toast(t('issue.thanks'), 'star'); }}>
                     <Icon name={n <= stars ? 'star' : 'star-outline'} size={26} color={n <= stars ? '#F59E0B' : C.ink3} />
                   </Pressable>
                 ))}
@@ -79,8 +82,13 @@ export default function IssueDetail() {
         </View>
       </Card>
       <IssueUpdates issue={i} />
+      <IssueChat issueId={i.id} />
       {resolved
-        ? <Btn full variant="ghost" icon="refresh" label={t('issue.reopen')} onPress={() => setReopening(true)} />
+        ? <>
+          <Btn full icon="checkmark-done" label={t('issue.confirm')} onPress={() => actions.confirmFixed(i.id)} />
+          <Btn full variant="ghost" icon="refresh" label={t('issue.reopen')} onPress={() => setReopening(true)} />
+        </>
+        : i.status === 'Closed' ? null
         : <><Sect title={t('issue.comment')} /><UpdateComposer issueId={i.id} /></>}
     </Screen>
     <ReopenModal issueId={i.id} visible={reopening} onClose={() => setReopening(false)} />

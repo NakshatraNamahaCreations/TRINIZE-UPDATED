@@ -12,10 +12,14 @@ import { Collections } from './pages/Collections';
 import { CommandCentre } from './pages/CommandCentre';
 import { Issues } from './pages/Issues';
 import { Login } from './pages/Login';
+import { Managers } from './pages/Managers';
 import { Modules } from './pages/Modules';
 import { Renewals } from './pages/Renewals';
+import { Subscriptions } from './pages/Subscriptions';
+import { Team } from './pages/Team';
 import { AuthProvider } from './store/AuthProvider';
-import { useAuth } from './store/context';
+import { LIVE } from './lib/api';
+import { useAuth, usePortal } from './store/context';
 import { PortalProvider } from './store/PortalContext';
 
 const RAIL_KEY = 'trinize.owner.rail';
@@ -29,8 +33,30 @@ function RequireAuth() {
   return <Outlet />;
 }
 
+/** Connected mode: nothing is drawn until the real records have arrived. */
+function Loading() {
+  const { loadError, reload } = usePortal();
+  const { session, signOut } = useAuth();
+  return (
+    <div className="boot">
+      <div className="logo-t">T</div>
+      {loadError ? (
+        <>
+          <b>Couldn’t load the portal</b>
+          <span>{loadError}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn sm" onClick={() => reload(session.at)}>Try again</button>
+            <button className="btn sm ghost" onClick={signOut}>Sign out</button>
+          </div>
+        </>
+      ) : <span>Loading your portfolio…</span>}
+    </div>
+  );
+}
+
 function Shell() {
   const { pathname } = useLocation();
+  const { ready } = usePortal();
   const [collapsed, setCollapsed] = useState(readRail);
   const [drawer, setDrawer] = useState(false);
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
@@ -40,6 +66,8 @@ function Shell() {
     return !c;
   }), []);
   const closeDrawer = useCallback(() => setDrawer(false), []);
+
+  if (LIVE && !ready) return <Loading />;
 
   return (
     <div className={'app' + (collapsed ? ' rail' : '')}>
@@ -71,8 +99,11 @@ export default function App() {
                 <Route path="collections" element={<Collections />} />
                 <Route path="associations" element={<Associations />} />
                 <Route path="associations/:id" element={<Association360 />} />
+                <Route path="subscriptions" element={<Subscriptions />} />
                 <Route path="issues" element={<Issues />} />
+                <Route path="managers" element={<Managers />} />
                 <Route path="modules" element={<Modules />} />
+                {LIVE && <Route path="team" element={<Team />} />}
                 <Route path="changed" element={<Changed />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

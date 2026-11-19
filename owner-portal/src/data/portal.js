@@ -1,10 +1,14 @@
-/* Fictional demo data, modelled on the live Trinize owner portal. Nothing here is stored or sent anywhere. */
+import { LIVE } from '../lib/api';
 
-export const TODAY = 'Sun 30 Aug 2026';
+/* Fictional demo data, modelled on the live Trinize owner portal. Nothing here is stored or sent anywhere.
+   When the portal is connected to the API (VITE_API_URL), these same arrays are emptied and refilled from
+   the server by hydrate() — the pages read them the same way in both modes. */
+
+export const TODAY = LIVE ? new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : 'Sun 30 Aug 2026';
 
 export const ASSOC = [
   {id:'asn-2', n:'Prestige Lakeside Habitat', city:'Bengaluru', type:'Apartment', plan:'Enterprise', bill:'yearly', state:'Active', pay:'Paid',
-   plots:3426, owners:2971, adopt:87, annual:1164840, renew:'14 Sep 2026', days:15, mrr:97070, c:'#E5F3FC', tc:'#0A6099', ini:'PL',
+   plots:3426, owners:2971, adopt:87, annual:1164840, renew:'14 Sep 2026', days:15, mrr:97070, c:'#E6EEFB', tc:'#1F5FB0', ini:'PL',
    admin:'Sanjana Rao', role:'Secretary', ph:'+91 80 4128 7000', em:'admin@plhabitat.org', reg:'KA/BLR/RWA/2015/1188', since:'14 Jun 2023',
    addr:'Varthur Main Road, Gunjur · Off Sarjapur Road · Bengaluru 560087', credits:18523,
    blocks:[['Tower 1',620,22],['Tower 2',580,22],['Tower 3',610,22],['Tower 4',566,20],['Tower 5',540,20],['Tower 6',510,18]],
@@ -13,7 +17,7 @@ export const ASSOC = [
    note:'Largest account — 70% of annual revenue. Renewal in under a month.',
    tl:[['Renewal invoice issued','TRZ-INV-2026-0117 · ₹11,64,840','5 days ago',1],['Quarterly business review held','Committee asked about a resident app','18 Aug 2026',0],['Enterprise uplift discussed','AI Assistant + Community modules','02 Aug 2026',0],['Owner onboarding crossed 85%','2,971 of 3,426 plots claimed','24 Jul 2026',0]]},
   {id:'asn-3', n:'Sobha Dream Acres', city:'Bengaluru', type:'Apartment', plan:'Professional', bill:'yearly', state:'Active', pay:'Paid',
-   plots:2100, owners:1622, adopt:77, annual:462000, renew:'01 Oct 2026', days:32, mrr:38500, c:'#E4F7EE', tc:'#067647', ini:'SD',
+   plots:2100, owners:1622, adopt:77, annual:462000, renew:'01 Oct 2026', days:32, mrr:38500, c:'#E2F4EA', tc:'#05683F', ini:'SD',
    admin:'Nagaraj Hebbar', role:'Secretary', ph:'+91 98862 41100', em:'office@sobhadreamacres.in', reg:'KA/BLR/RWA/2017/0442', since:'09 Nov 2023',
    addr:'Panathur Main Road · Bengaluru 560087', credits:9400,
    blocks:[['Cluster A',720,18],['Cluster B',690,18],['Cluster C',690,18]],
@@ -31,7 +35,7 @@ export const ASSOC = [
    note:'Small but healthy. One invoice part paid for 80 days.',
    tl:[['Invoice part paid','TRZ-INV-2026-0055 · ₹9,000 outstanding','80 days ago',1],['Committee role change raised a ticket','ISS-2033 · sign-in after role change','15 Aug 2026',0]]},
   {id:'asn-4', n:'Green Meadows Villas', city:'Mysuru', type:'Villa', plan:'Starter', bill:'monthly', state:'Active', pay:'Past due',
-   plots:84, owners:61, adopt:73, annual:12096, renew:'15 Aug 2026', days:-15, mrr:1008, c:'#FEF0DC', tc:'#B54708', ini:'GM',
+   plots:84, owners:61, adopt:73, annual:12096, renew:'15 Aug 2026', days:-15, mrr:1008, c:'#FCEFD9', tc:'#A44207', ini:'GM',
    admin:'Bhagya Lakshmi', role:'President', ph:'+91 97310 55884', em:'greenmeadows.rwa@gmail.com', reg:'KA/MYS/RWA/2019/0231', since:'11 Mar 2025',
    addr:'Bogadi 2nd Stage · Mysuru 570026', credits:0,
    blocks:[['Villas 1–48',48,1],['Villas 49–84',36,1]],
@@ -49,7 +53,7 @@ export const ASSOC = [
    note:'Trial ends in 4 days at 18% owner onboarding — the number that decides conversion.',
    tl:[['Trial ends in 4 days','₹30,240/yr at stake','03 Sep 2026',1],['Bulk owner import failing','ISS-2038 · two owners per plot rejected','17 Aug 2026',1],['Trial started','210 plots · Starter','04 Aug 2026',0]]},
   {id:'asn-6', n:'Coastal Grove Residency', city:'Mangaluru', type:'Mixed', plan:'Professional', bill:'yearly', state:'Pending', pay:'Trial',
-   plots:340, owners:0, adopt:0, annual:74800, renew:'11 Sep 2026', days:12, trial:true, mrr:6233, c:'#E5F3FC', tc:'#0A6099', ini:'CG',
+   plots:340, owners:0, adopt:0, annual:74800, renew:'11 Sep 2026', days:12, trial:true, mrr:6233, c:'#E6EEFB', tc:'#1F5FB0', ini:'CG',
    admin:"Ronald D'Souza", role:'President', ph:'+91 98450 71190', em:'coastalgrove.rwa@gmail.com', reg:'KA/MNG/RWA/2022/0308', since:'12 Aug 2026',
    addr:'Kadri Road · Mangaluru 575003', credits:0,
    blocks:[['Tower East',180,12],['Row houses',160,1]],
@@ -58,7 +62,7 @@ export const ASSOC = [
    note:'Awaiting verification — registration certificate and bank proof pending. Nothing can start until this clears.',
    tl:[['Awaiting verification','Registration + bank proof not yet checked','12 Aug 2026',1],['Trial ends in 12 days','No owners onboarded yet','11 Sep 2026',1]]},
   {id:'asn-7', n:'Silver Oak Enclave', city:'Hubballi', type:'Apartment', plan:'Starter', bill:'monthly', state:'Suspended', pay:'Suspended',
-   plots:96, owners:71, adopt:74, annual:13824, renew:'05 Jun 2026', days:-86, mrr:0, c:'#F1F3F7', tc:'#54637D', ini:'SO',
+   plots:96, owners:71, adopt:74, annual:13824, renew:'05 Jun 2026', days:-86, mrr:0, c:'#EFEEE9', tc:'#54525E', ini:'SO',
    admin:'Imtiaz Ali', role:'Secretary', ph:'+91 94480 11227', em:'silveroak.rwa@gmail.com', reg:'KA/HBL/RWA/2018/0655', since:'18 Jan 2025',
    addr:'Vidyanagar · Hubballi 580021', credits:0,
    blocks:[['Block 1',96,8]],
@@ -115,6 +119,8 @@ export const MODULES = [
 
 export const MRR = [97100,101200,104800,108300,112600,116900,121400,125800,129900,133100,136200,138778];
 export const MONTHS = ['Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug'];
+/** the same months as chart tooltips show them */
+export const MONTHS_FULL = MONTHS.map(m => m + ' 2026');
 /** [month, invoiced, collected] */
 export const BILLED = [['Mar',210000,205000],['Apr',232000,228000],['May',256000,249000],['Jun',274000,268000],['Jul',298000,286000],['Aug',1298000,120000]];
 
@@ -131,10 +137,39 @@ export const OPERATOR = { name: 'Ravi Kulkarni', first: 'Ravi', ini: 'RK', role:
 /** fictional demo credentials, shown on the login page */
 export const DEMO_LOGIN = { email: 'ravi.kulkarni@trinize.com', password: 'Trinize@2026' };
 
+/** property managers (VPMs): created here, they work on the mobile app in the societies assigned to them */
+export const VPMS = [
+  { id: 'vpm-1', name: 'Imran Qureshi', phone: '9833300003', email: 'imran.qureshi@trinize.com', societies: [{ id: 'asn-2', name: 'Prestige Lakeside Habitat' }, { id: 'asn-4', name: 'Green Meadows Villas' }], openIssues: 9 },
+  { id: 'vpm-2', name: 'Lalitha Gowda', phone: '9844400004', email: 'lalitha.gowda@trinize.com', societies: [{ id: 'asn-3', name: 'Sobha Dream Acres' }, { id: 'asn-1', name: 'Mytri Apartments' }], openIssues: 4 },
+  { id: 'vpm-3', name: 'Prakash Reddy', phone: '9855500005', email: null, societies: [{ id: 'asn-5', name: 'Nandi Hills Plotted Layout' }], openIssues: 1 },
+];
+
 export const findAssoc = id => ASSOC.find(x => x.id === id);
+
+/** how each plan is described; connected, the super admin edits this under Modules & plans */
+export const PLAN_INFO = {
+  Starter: { tag: 'Run the society', about: 'The unit register, residents, maintenance billing, notices and the vendor directory.', price: 0 },
+  Professional: { tag: 'Run it properly', about: 'Adds accounting, rent collection, work orders, visitor and delivery management, and reports.', price: 0 },
+  Enterprise: { tag: 'Everything, automated', about: 'Adds leasing and eSign, tenant screening, workflows, AI inspections and assistant, and the community app.', price: 0 },
+};
+
+const fill = (target, rows) => { target.length = 0; target.push(...rows); };
+/** connected mode: replace every record with what the server holds */
+export function hydrate(d) {
+  fill(ASSOC, d.assoc); fill(INVOICES, d.invoices); fill(ISSUES, d.issues); fill(FEED, d.feed); fill(MODULES, d.modules);
+  fill(MRR, d.mrr); fill(MONTHS, d.months); fill(MONTHS_FULL, d.monthsFull); fill(BILLED, d.billed); fill(VPMS, d.vpms);
+  fill(PROPERTY_MANAGERS, [...new Set([...d.vpms.map(v => v.name), OPERATOR.name])]);
+  for (const p of Object.keys(d.plans ?? {})) if (PLAN_INFO[p]) Object.assign(PLAN_INFO[p], d.plans[p]);
+}
+export function setOperator(name, email) {
+  Object.assign(OPERATOR, { name, first: name.split(' ')[0], ini: initials(name).toUpperCase(), email });
+}
+// connected: start empty so no fictional record is ever shown while the real ones load
+if (LIVE) for (const list of [ASSOC, INVOICES, ISSUES, FEED, MODULES, MRR, BILLED, VPMS, PROPERTY_MANAGERS]) list.length = 0;
 
 /* Health scoring — a real model, not decoration. */
 export function health(a) {
+  if (a.h) return a.h; // connected: the server scores the account
   if (a.state === 'Suspended') return { score: 12, band: 'Critical', why: 'Suspended for non-payment' };
   let s = 50;
   s += Math.round(a.adopt * 0.35); // adoption is the strongest renewal signal
@@ -154,7 +189,7 @@ export function health(a) {
   return { score: s, band, why };
 }
 
-export const bandColor = b => (b === 'Healthy' ? '#067647' : b === 'Watch' ? '#B54708' : '#B42318');
+export const bandColor = b => (b === 'Healthy' ? '#05683F' : b === 'Watch' ? '#A44207' : '#B42318');
 
 export const fmtI = n => '₹' + n.toLocaleString('en-IN');
 export const fmtL = n => n >= 10000000 ? '₹' + (n / 10000000).toFixed(1) + 'Cr'
@@ -165,7 +200,7 @@ export const num = n => n.toLocaleString('en-IN');
 export const initials = name => name.split(' ').filter(w => /^[A-Za-z]/.test(w)).map(w => w[0]).slice(0, 2).join('');
 
 /* pill tones */
-export const stateTone = s => (s === 'Active' ? 'good' : s === 'Pending' ? 'warn' : 'dim');
+export const stateTone = s => (s === 'Active' ? 'good' : s === 'Pending' ? 'warn' : s === 'Trial' ? 'sky' : 'dim');
 export const payTone = p => (p === 'Paid' ? 'good' : p === 'Trial' ? 'sky' : p === 'Part paid' ? 'warn' : 'bad');
 export const priTone = p => (p === 'High' ? 'bad' : p === 'Low' ? 'dim' : 'warn');
 export const slaTone = s => (s === 'over' ? 'bad' : s === 'risk' ? 'warn' : s === 'met' ? 'good' : 'dim');

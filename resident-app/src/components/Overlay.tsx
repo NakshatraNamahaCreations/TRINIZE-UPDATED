@@ -5,13 +5,16 @@ import { C, font } from '@/theme';
 import { Icon, type IconName } from './Icon';
 import { Txt } from './Txt';
 
-export type SheetKind = 'create' | 'gratitude' | 'suggest' | null;
+export type SheetKind = 'create' | 'gratitude' | 'suggest' | 'item' | null;
+/** the post or reply an "item" sheet acts on */
+export type ItemRef = { kind: 'post' | 'reply'; id: string; discId: string; by: string; unit: string; text: string };
 
 type UI = {
   toast: (msg: string, icon?: IconName) => void;
   confetti: () => void;
   sheet: SheetKind;
-  openSheet: (k: Exclude<SheetKind, null>) => void;
+  openSheet: (k: Exclude<SheetKind, null>, item?: ItemRef) => void;
+  item: ItemRef | null;
   closeSheet: () => void;
 };
 
@@ -27,6 +30,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [toastMsg, setToastMsg] = useState<{ msg: string; icon: IconName; key: number } | null>(null);
   const [bursts, setBursts] = useState<number[]>([]);
   const [sheet, setSheet] = useState<SheetKind>(null);
+  const [item, setItem] = useState<ItemRef | null>(null);
 
   const toast = useCallback((msg: string, icon: IconName = 'information-circle') => setToastMsg({ msg, icon, key: Date.now() }), []);
   const confetti = useCallback(() => {
@@ -36,10 +40,10 @@ export function UIProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<UI>(() => ({
-    toast, confetti, sheet,
-    openSheet: k => setSheet(k),
+    toast, confetti, sheet, item,
+    openSheet: (k, it) => { setItem(it ?? null); setSheet(k); },
     closeSheet: () => setSheet(null),
-  }), [toast, confetti, sheet]);
+  }), [toast, confetti, sheet, item]);
 
   return (
     <UICtx.Provider value={value}>

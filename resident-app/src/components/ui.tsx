@@ -1,10 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, type Href } from 'expo-router';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, TextInput, View, type LayoutRectangle, type StyleProp, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, TextInput, View, type LayoutRectangle, type StyleProp, type ScrollViewInstance, type TextInputProps, type TextStyle, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useT } from '@/i18n';
 import { unreadCount, useStore } from '@/store/store';
+import { usePullRefresh } from '@/lib/refresh';
 import { C, font, GRAD } from '@/theme';
 
 import { Icon, IconTile, type IconName } from './Icon';
@@ -210,12 +211,14 @@ function useBellRing(unread: number) {
   };
 }
 
-export function Screen({ header, children, scroll = true }: { header: ReactNode; children: ReactNode; scroll?: boolean }) {
+export function Screen({ header, children, scroll = true, scrollRef }: { header: ReactNode; children: ReactNode; scroll?: boolean; scrollRef?: Ref<ScrollViewInstance> }) {
+  // pull down to read everything again; screens that scroll by themselves add the same control to their own list
+  const refreshControl = usePullRefresh();
   return (
     <View style={s.screen}>
       {header}
       {scroll
-        ? <ScrollView contentContainerStyle={{ paddingBottom: 18 }} keyboardShouldPersistTaps="handled">{children}</ScrollView>
+        ? <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 18 }} keyboardShouldPersistTaps="handled" refreshControl={refreshControl}>{children}</ScrollView>
         : children}
     </View>
   );
@@ -237,11 +240,11 @@ const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: C.bg },
   card: { backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 14, marginHorizontal: 14, marginVertical: 6, paddingVertical: 13, paddingHorizontal: 14 },
   sect: { paddingTop: 16, paddingHorizontal: 16, paddingBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectText: { fontSize: 11, letterSpacing: 1.1, color: C.ink3 },
-  sectLink: { fontSize: 11.5, color: C.acc },
+  sectText: { fontSize: 12, letterSpacing: 1, color: C.ink3 },
+  sectLink: { fontSize: 12.5, color: C.acc },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, alignSelf: 'flex-start' },
-  pillText: { fontSize: 9.5, letterSpacing: 0.3 },
+  pillText: { fontSize: 11, letterSpacing: 0.2 },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, overflow: 'hidden', minHeight: 40 },
   btnText: { fontSize: 12.5 },
   full: { marginHorizontal: 14, marginVertical: 6, alignSelf: 'stretch' },

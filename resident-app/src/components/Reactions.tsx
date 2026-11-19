@@ -22,9 +22,9 @@ export function Reactions({ d }: { d: Discussion }) {
       {REACTIONS.map(([e, off, onIc]) => {
         const on = d.myReact === e;
         return (
-          <Pressable key={e} onPress={() => actions.react(d.id, e)} accessibilityState={{ selected: on }} style={[s.react, on && s.reactOn]}>
+          <Pressable key={e} onPress={() => actions.react(d.id, e)} hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }} accessibilityRole="button" accessibilityState={{ selected: on }} style={[s.react, on && s.reactOn]}>
             <Icon name={on ? onIc : off} size={14} color={on ? C.acc : C.ink3} />
-            <Txt w={700} style={{ fontSize: 12, color: on ? C.acc : C.ink2 }}>{baseCount(d, e) + (on ? 1 : 0)}</Txt>
+            <Txt w={700} style={{ fontSize: 12, color: on ? C.acc : C.ink2 }}>{d.reacts ? d.reacts[e] ?? 0 : baseCount(d, e) + (on ? 1 : 0)}</Txt>
           </Pressable>
         );
       })}
@@ -33,7 +33,7 @@ export function Reactions({ d }: { d: Discussion }) {
 }
 
 const s = StyleSheet.create({
-  reacts: { flexDirection: 'row', gap: 6, marginTop: 9 },
-  react: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  reacts: { flexDirection: 'row', gap: 8, marginTop: 9 },
+  react: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: C.line, backgroundColor: '#fff', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, minHeight: 34 },
   reactOn: { backgroundColor: C.accBg, borderColor: C.accBorder },
 });

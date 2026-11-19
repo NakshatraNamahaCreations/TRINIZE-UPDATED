@@ -1,8 +1,8 @@
 /* Demo records for Prestige Lakeside Habitat — all names, numbers and messages are fictional. */
 
 export type Tone = 'Polite' | 'Friendly' | 'Funny' | 'Short & Clear';
-export type Priority = 'Low' | 'Medium' | 'High';
-export type IssueStatus = 'Submitted' | 'Acknowledged' | 'Assigned' | 'In Progress' | 'Resolved' | 'Closed';
+export type Priority = 'Low' | 'Medium' | 'High' | 'Emergency';
+export type IssueStatus = 'Submitted' | 'Acknowledged' | 'Assigned' | 'In Progress' | 'On Hold' | 'Resolved' | 'Closed';
 export type ModAction = 'Allowed' | 'Warned author' | 'Rewrite suggested' | 'Hidden';
 
 export type Issue = {
@@ -18,12 +18,15 @@ export type ModItem = {
   sev: 'Low' | 'Medium' | 'High'; state: 'open' | 'done'; rec: ModAction; ai: string; ctx: string;
 };
 export type ResolvedMod = { id: string; by: string; when: string; text: string; action: string; admin: string };
-export type Announcement = { id: string; title: string; body: string; pri: 'High' | 'Normal'; aud: string; when: string; by: string; ack: boolean; read: number };
-export type CommunityEvent = { id: string; title: string; when: string; where: string; cap: number; going: number };
-export type Poll = { id: string; q: string; opts: { t: string; v: number }[]; elig: string; closed?: boolean };
-export type User = { n: string; unit: string; role: 'Owner' | 'Tenant'; status: 'Active' | 'Warned' | 'Restricted' | 'Suspended'; warns: number };
-export type AuditEntry = { who: string; what: string; when: string };
-export type KnowledgeDoc = { n: string; t: string; d: string };
+/** `read` is a percentage; connected to the API it is the share of residents who acknowledged, and `acks` the count */
+export type Announcement = { id: string; title: string; body: string; pri: 'High' | 'Normal'; aud: string; when: string; by: string; ack: boolean; read: number; acks?: number };
+/** `wait` = people on the waitlist, `mins` = how long it runs, `at` = the start as an ISO time (when known) */
+export type CommunityEvent = { id: string; title: string; when: string; where: string; cap: number; going: number; wait?: number; mins?: number; at?: string; desc?: string };
+export type Poll = { id: string; q: string; opts: { t: string; v: number }[]; elig: string; closed?: boolean; closesAt?: string; owners?: boolean };
+export type User = { n: string; unit: string; role: 'Owner' | 'Tenant'; status: 'Active' | 'Warned' | 'Restricted' | 'Suspended' | 'Blocked'; warns: number };
+/** `at` is the exact ISO time, when the server gave one */
+export type AuditEntry = { who: string; what: string; when: string; at?: string };
+export type KnowledgeDoc = { n: string; t: string; d: string; /** connected: the server's id and the text the assistant answers from */ id?: string; body?: string };
 
 export const ADMIN = { name: 'Sanjana Rao', first: 'Sanjana', role: 'Secretary' };
 export const SOCIETY = { name: 'Prestige Lakeside Habitat' };
@@ -36,7 +39,7 @@ export const initialState = () => ({
     qna: true, issueCreate: true, toneRewrite: true, summaries: true,
     tones: { Polite: true, Friendly: true, Funny: true, 'Short & Clear': true } as Record<Tone, boolean>,
     threshold: 'Standard' as 'Lenient' | 'Standard' | 'Strict',
-    autoHold: 'High severity' as 'Medium & above' | 'High severity',
+    autoHold: 'Medium & above' as 'Medium & above' | 'High severity',
     docs: [
       { n: 'Community Handbook v3', t: 'PDF · 48 pages', d: '12 Jul 2026' },
       { n: 'Pool, Gym & Clubhouse Rules 2026', t: 'PDF · 6 pages', d: '02 Jun 2026' },

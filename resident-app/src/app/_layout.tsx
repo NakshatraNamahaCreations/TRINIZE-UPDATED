@@ -2,15 +2,17 @@ import {
   PlusJakartaSans_400Regular, PlusJakartaSans_500Medium, PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold, PlusJakartaSans_800ExtraBold, useFonts,
 } from '@expo-google-fonts/plus-jakarta-sans';
-import { Stack } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Dialog } from '@/components/Dialog';
 import { iconFont } from '@/components/Icon';
 import { UIProvider } from '@/components/Overlay';
 import { Sheets } from '@/components/Sheets';
 import { Splash } from '@/components/Splash';
+import { TourProvider } from '@/components/Tutorial';
 import { LangProvider } from '@/i18n';
 import { SplashScreen } from '@/lib/native';
 import { setupNotifications } from '@/lib/notify';
@@ -25,16 +27,36 @@ setupNotifications();
 
 /** Signed-out users only reach (auth); signing in swaps the whole stack for the tabs. */
 function RootStack() {
-  const { signedIn } = useAuth();
+  const { signedIn, role } = useAuth();
+  const vpm = signedIn && role === 'vpm';
+  const guard = signedIn && role === 'guard';
+  // signing in lands on "/", the residents' home; a property manager has no such screen, so take them to their societies
+  const router = useRouter();
+  const path = usePathname();
+  useEffect(() => {
+    if (vpm && !path.startsWith('/manage') && !path.startsWith('/legal')) router.replace('/manage');
+    // a guard always starts at the gate itself, never part-way into the entry form
+    if (guard && !path.startsWith('/post') && !path.startsWith('/legal')) router.replace('/post');
+  }, [vpm, guard, path, router]);
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.bg }, animation: 'fade' }}>
       {/* "/" is the home tab, so a cold start needs an explicit target instead of "Unmatched Route" */}
-      <Stack.Protected guard={signedIn} redirectTo="/login">
+      <Stack.Protected guard={signedIn && !vpm && !guard} redirectTo={vpm ? '/manage' : guard ? '/post' : '/login'}>
         <Stack.Screen name="(tabs)" />
+      </Stack.Protected>
+      {/* a property manager's number gets their societies instead of the resident tabs */}
+      <Stack.Protected guard={vpm}>
+        <Stack.Screen name="(vpm)" />
+      </Stack.Protected>
+      {/* a security guard's number gets the gate */}
+      <Stack.Protected guard={guard}>
+        <Stack.Screen name="(guard)" />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
+      {/* readable signed in or out — linked from the sign-in screen and Profile */}
+      <Stack.Screen name="legal/[doc]" options={{ animation: 'slide_from_right' }} />
     </Stack>
   );
 }
@@ -61,10 +83,15 @@ export default function RootLayout() {
           <AuthProvider initial={boot.auth}>
             <StoreProvider initial={boot.store}>
               <StatusBar style="dark" />
-              <RootStack />
-              <Sheets />
+              {/* the tutorial overlay is drawn after the tabs, so it can spotlight the tab bar */}
+              <TourProvider>
+                <RootStack />
+                <Sheets />
+              </TourProvider>
             </StoreProvider>
           </AuthProvider>
+          {/* every confirm() in the app is drawn by this one dialog */}
+          <Dialog />
           {splash && <Splash onDone={hideSplash} />}
         </UIProvider>
       </LangProvider>

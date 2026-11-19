@@ -27,10 +27,10 @@ export function Copilot() {
   return (
     <>
       <div className={'veil cop-veil' + (cop.open ? ' show' : '')} onClick={closeCop} />
-      <div className={'cop' + (cop.open ? ' open' : '')} role="dialog" aria-label="AI copilot">
+      <div className={'cop' + (cop.open ? ' open' : '')} role="dialog" aria-label="Trinize Assistant">
         <div className="cop-h">
           <div className="ic"><Icon3D name="sparkles" size={24} /></div>
-          <div style={{ flex: 1 }}><b>Portfolio Copilot</b><span>Answers from your own records · suggests, never acts</span></div>
+          <div style={{ flex: 1 }}><b>Trinize Assistant</b><span>Answers from your own records · suggests, never acts</span></div>
           <button onClick={closeCop} aria-label="Close" className="icon-btn"><X size={17} /></button>
         </div>
         <div className="cop-log" ref={logRef}>
@@ -53,7 +53,7 @@ export function Copilot() {
           <button onClick={send} aria-label="Send"><SendHorizontal size={16} /></button>
         </div>
       </div>
-      <button className="fab" onClick={openCop} aria-label="Open AI copilot" title="Portfolio Copilot"><Sparkles size={22} /></button>
+      <button className="fab" onClick={openCop} aria-label="Open Trinize Assistant" title="Trinize Assistant"><Sparkles size={22} /></button>
     </>
   );
 }

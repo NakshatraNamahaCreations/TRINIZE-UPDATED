@@ -9,15 +9,16 @@ import { useStore } from '@/store/store';
 import { C, GRAD } from '@/theme';
 import { Icon, MaterialCommunityIcons, type IconName, type MciName } from './Icon';
 import { useUI } from './Overlay';
+import { useTourTarget, type TourTarget } from './Tutorial';
 import { Txt } from './Txt';
 
 /** [inactive, active] — outline at rest, filled when selected */
-type TabMeta = { ic: [IconName, IconName]; label: Key; mci?: MciName };
+type TabMeta = { ic: [IconName, IconName]; label: Key; mci?: MciName; tour?: TourTarget };
 const ITEMS: Record<string, TabMeta> = {
   // house + heart echoes the brand mark; it has no outline cut, so focus is shown by colour and the hop
   '(home)': { ic: ['home-outline', 'home'], mci: 'home-heart', label: 'tab.home' },
-  assistant: { ic: ['sparkles-outline', 'sparkles'], label: 'tab.assistant' },
-  issues: { ic: ['ticket-outline', 'ticket'], label: 'tab.issues' },
+  assistant: { ic: ['sparkles-outline', 'sparkles'], label: 'tab.assistant', tour: 'assistant' },
+  issues: { ic: ['ticket-outline', 'ticket'], label: 'tab.issues', tour: 'issues' },
   profile: { ic: ['person-circle-outline', 'person-circle'], label: 'tab.profile' },
 };
 
@@ -29,6 +30,7 @@ export function TabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
   const { state: store } = useStore();
   const openMine = store.issues.filter(i => i.mine && isOpen(i)).length;
   const keyboard = useKeyboardVisible();
+  const createRef = useTourTarget('create');
 
   const [spin] = useState(() => new Animated.Value(0));
   useEffect(() => {
@@ -54,7 +56,7 @@ export function TabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
     <View style={[s.nav, { paddingBottom: 10 + insets.bottom }]}>
       {state.routes.slice(0, half).map((_, i) => tab(i))}
       <View style={s.plusWrap}>
-        <Pressable onPress={() => openSheet('create')} accessibilityLabel={t('tab.create')} style={s.plusShadow}>
+        <Pressable ref={createRef} collapsable={false} onPress={() => openSheet('create')} accessibilityLabel={t('tab.create')} style={s.plusShadow}>
           <Animated.View style={{ transform: [{ rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '135deg'] }) }] }}>
             <LinearGradient colors={GRAD.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.plus}>
               {/* drawn, not a "+" glyph — Android font padding pushes text off-centre */}
@@ -71,12 +73,13 @@ export function TabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
 
 /** The selected icon hops and its top bar grows out from the centre. */
 function TabItem({ meta, label, focused, dot, onPress }: { meta: TabMeta; label: string; focused: boolean; dot: boolean; onPress: () => void }) {
+  const tourRef = useTourTarget(meta.tour);
   const [on] = useState(() => new Animated.Value(focused ? 1 : 0));
   useEffect(() => {
     Animated.spring(on, { toValue: focused ? 1 : 0, speed: 16, bounciness: 12, useNativeDriver: true }).start();
   }, [focused, on]);
   return (
-    <Pressable onPress={onPress} style={s.item} accessibilityRole="tab" accessibilityState={{ selected: focused }}>
+    <Pressable ref={tourRef} collapsable={false} onPress={onPress} style={s.item} accessibilityRole="tab" accessibilityState={{ selected: focused }}>
       <Animated.View style={[s.bar, { opacity: on, transform: [{ scaleX: on }] }]} />
       {dot && <View style={s.dot} />}
       <Animated.View style={{ transform: [{ translateY: on.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) }, { scale: on.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) }] }}>
@@ -106,7 +109,7 @@ const s = StyleSheet.create({
   item: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 5 },
   bar: { position: 'absolute', top: -6, width: 22, height: 3, borderBottomLeftRadius: 4, borderBottomRightRadius: 4, backgroundColor: C.acc },
   dot: { position: 'absolute', top: 3, right: '28%', width: 8, height: 8, borderRadius: 4, backgroundColor: C.red, borderWidth: 1.5, borderColor: '#fff', zIndex: 1 },
-  label: { fontSize: 10 },
+  label: { fontSize: 11 },
   // centred on the icon + label stacks either side, so all five sit on one line
   plusWrap: { flexBasis: 62, alignItems: 'center', justifyContent: 'center' },
   plusShadow: { borderRadius: 23, shadowColor: '#7C55F7', shadowOpacity: 0.35, shadowRadius: 6, shadowOffset: { width: 0, height: 4 }, elevation: 5, backgroundColor: '#7C55F7' },

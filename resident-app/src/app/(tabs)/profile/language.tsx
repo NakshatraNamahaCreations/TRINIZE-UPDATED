@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useUI } from '@/components/Overlay';
 import { Card, Header, Icon, Meta, Screen, Sect, Txt } from '@/components/ui';
 import { LANGS, useT, type Lang } from '@/i18n';
+import { greeting } from '@/lib/greeting';
 import { ME } from '@/store/data';
 import { C } from '@/theme';
 
@@ -45,7 +46,7 @@ export default function Language() {
 
       <Sect title={t('lang.preview')} />
       <Card delay={200} style={s.preview}>
-        <Txt w={800} style={{ fontSize: 15, color: '#fff' }}>{t('home.morning', { name: ME.first })}</Txt>
+        <Txt w={800} style={{ fontSize: 15, color: '#fff' }}>{t(greeting(), { name: ME.first })}</Txt>
         <Txt style={{ fontSize: 12, color: 'rgba(255,255,255,.9)', marginTop: 4 }}>{t('home.heroLine')}</Txt>
         <View style={s.previewBtn}>
           <Icon name="sparkles" size={14} color={C.acc} />

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Chip } from '@/components/Sheets';
 import { Btn, Card, FadeIn, Header, Icon, IconTile, initials, Input, Meta, Pill, Screen, Sect, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
+import { confirm } from '@/lib/confirm';
 import { formatPhone, useAuth } from '@/store/auth';
 import { ME, RELATIONS, SOCIETY, type Member, type Relation } from '@/store/data';
 import { useStore } from '@/store/store';
@@ -33,7 +34,7 @@ function AddMember({ onDone }: { onDone: () => void }) {
         <Input value={name} onChangeText={setName} autoCapitalize="words" style={tried && !nameOk && s.bad} />
         {tried && !nameOk && <Meta style={s.err}>{t('fam.err.name')}</Meta>}
         <Meta style={s.label}>{t('fam.phone')}</Meta>
-        <Input value={formatPhone(phone)} onChangeText={v => setPhone(v.replace(/\D/g, '').slice(0, 10))} keyboardType="phone-pad" maxLength={11} placeholder="98765 43210" style={tried && !phoneOk && s.bad} />
+        <Input value={formatPhone(phone)} onChangeText={v => setPhone(v.replace(/\D/g, '').slice(0, 10))} keyboardType="phone-pad" maxLength={11} style={tried && !phoneOk && s.bad} />
         {tried && !phoneOk && <Meta style={s.err}>{t('fam.err.phone')}</Meta>}
         <Meta style={s.label}>{t('fam.relation')}</Meta>
         <View style={s.chips}>
@@ -54,10 +55,8 @@ export default function Family() {
   const { state, actions } = useStore();
   const [adding, setAdding] = useState(false);
 
-  const remove = (m: Member) => Alert.alert(t('fam.removeT'), t('fam.removeB', { name: m.name, unit: ME.unit }), [
-    { text: t('common.cancel'), style: 'cancel' },
-    { text: t('fam.removeOk'), style: 'destructive', onPress: () => actions.removeMember(m.id) },
-  ]);
+  const remove = (m: Member) => confirm(t('fam.removeT'), t('fam.removeB', { name: m.name, unit: ME.unit }), t('fam.removeOk'), t('common.cancel'),
+    () => actions.removeMember(m.id), { icon: 'person-remove' });
 
   return (
     <Screen header={<Header title={t('profile.family')} back="/profile" />}>
@@ -66,7 +65,7 @@ export default function Family() {
         <View style={{ flex: 1 }}>
           <Meta style={{ color: 'rgba(255,255,255,.8)' }}>{t('fam.unit')}</Meta>
           <Txt w={800} style={{ fontSize: 16, color: '#fff' }}>{ME.flat}</Txt>
-          <Txt style={{ fontSize: 11.5, color: 'rgba(255,255,255,.85)' }}>{ME.unit} · {SOCIETY.name}</Txt>
+          <Txt style={{ fontSize: 12, color: 'rgba(255,255,255,.85)' }}>{ME.unit} · {SOCIETY.name}</Txt>
         </View>
       </Card>
 

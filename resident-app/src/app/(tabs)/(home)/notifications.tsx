@@ -23,15 +23,15 @@ export default function Notifications() {
       <Segmented items={[['all', t('notif.all')], ['unread', t('notif.unread')], ['issues', t('notif.issues')], ['community', t('notif.community')]]} value={tab} onChange={setTab} />
       <View style={s.bar}>
         <Meta>{t('notif.count', { n: unreadCount(state) })}</Meta>
-        <Pressable onPress={actions.markAllRead} hitSlop={8}><Txt w={700} style={{ fontSize: 11.5, color: C.acc }}>{t('notif.markAll')}</Txt></Pressable>
+        <Pressable onPress={actions.markAllRead} hitSlop={8}><Txt w={700} style={{ fontSize: 12, color: C.acc }}>{t('notif.markAll')}</Txt></Pressable>
       </View>
       {!list.length && <EmptyState icon="notifications-off-outline" title={t('notif.empty.t')} body={t('notif.empty.b')} />}
       {list.map((n, i) => (
-        <Card key={n.id} delay={stagger(i)} style={[s.notif, n.unread && s.unread]} onPress={() => { actions.readNotif(n.id); router.navigate(TARGET[n.goTo]); }}>
+        <Card key={n.id} delay={stagger(i)} style={[s.notif, n.unread && s.unread]} onPress={() => { actions.readNotif(n.id); router.navigate((n.href as Href | undefined) ?? TARGET[n.goTo]); }}>
           <IconTile name={n.icon} size={36} bg={n.c} fg={n.tc} />
           <View style={{ flex: 1 }}>
             <Txt w={700} style={{ fontSize: 12.5 }}>{n.t}</Txt>
-            <Txt style={{ fontSize: 11.5, color: C.ink2, marginTop: 2 }}>{n.s}</Txt>
+            <Txt style={{ fontSize: 12, color: C.ink2, marginTop: 2 }}>{n.s}</Txt>
             <Meta style={{ marginTop: 3 }}>{n.when}</Meta>
           </View>
           {n.unread && <View style={s.dot} />}

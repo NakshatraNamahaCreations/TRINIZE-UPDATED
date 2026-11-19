@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View, type ScrollViewInstance } from 'react-native';
+import { useUI } from '@/components/Overlay';
 import { Reactions } from '@/components/Reactions';
 import { Card, EmptyState, FadeIn, Header, Icon, initials, Meta, Pill, Row, Screen, Sect, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
@@ -8,22 +9,43 @@ import { ME } from '@/store/data';
 import { useStore } from '@/store/store';
 import { C, font } from '@/theme';
 
+/** replies shown before "Show earlier comments" */
+const PAGE = 4;
+
 export default function DiscussionDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state, actions } = useStore();
   const { t } = useT();
+  const { openSheet } = useUI();
   const [text, setText] = useState('');
   const [blocked, setBlocked] = useState(false);
+  const [all, setAll] = useState(false);
   const scroll = useRef<ScrollViewInstance>(null);
   const d = state.discussions.find(x => x.id === id);
+  // connected to the API, the thread is read when the post is opened
+  const { loadPost } = actions;
+  useEffect(() => { if (id) loadPost(id); }, [id, loadPost]);
 
   if (!d) return <Screen header={<Header title={t('post.title')} back="/discussions" />}><EmptyState icon="chatbubbles-outline" title={t('post.nf.t')} body={t('post.nf.b')} /></Screen>;
 
   const hideUnit = (by: string) => by === ME.name && !state.settings.privacy.showFlat;
   // other residents never see a held reply; its author does, flagged
-  const thread = (d.thread ?? []).filter(r => !r.held || r.by === ME.name);
-  const earlier = Math.max(0, d.comments - thread.filter(r => !r.held).length);
+  const thread = (d.thread ?? []).filter(r => (!r.held || r.by === ME.name) && !state.blocked.includes(r.by));
+  // the latest few first; the rest are one tap away
+  const shown = all ? thread : thread.slice(-PAGE);
+  const earlier = thread.length - shown.length;
   const open = d.state === 'published';
+  const menu = (kind: 'post' | 'reply', id: string, by: string, unit: string, body: string) =>
+    openSheet('item', { kind, id, discId: d.id, by, unit, text: body });
+
+  if (state.blocked.includes(d.by)) {
+    return (
+      <Screen header={<Header title={t('post.title')} back="/discussions" />}>
+        <EmptyState icon="eye-off-outline" title={t('menu.blockedPost.t', { name: d.by })} body={t('menu.blockedPost.b')}
+          action={t('menu.unblock')} onAction={() => actions.unblock(d.by)} />
+      </Screen>
+    );
+  }
 
   const send = () => {
     const v = text.trim();
@@ -40,34 +62,45 @@ export default function DiscussionDetail() {
       <Header title={t('post.title')} back="/discussions" bell />
       <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
         <Card style={d.state === 'hidden' && { opacity: 0.6 }}>
+          <Pressable onPress={() => menu('post', d.id, d.by, d.unit, d.title + '\n\n' + d.body)} hitSlop={10} accessibilityLabel={t('menu.more')} style={s.more}>
+            <Icon name="ellipsis-horizontal" size={20} color={C.ink2} />
+          </Pressable>
           <Row>
             {d.pinned && <Pill tone="acc">{t('disc.pinned')}</Pill>}
             {d.state === 'held' && <Pill tone="warn">{t('disc.held')}</Pill>}
             {d.state === 'hidden' && <Pill tone="bad">{t('disc.removed')}</Pill>}
           </Row>
-          <Txt w={800} style={{ fontSize: 16, marginTop: 4 }}>{d.title}</Txt>
+          <Txt w={800} style={{ fontSize: 16, marginTop: 4, paddingRight: 34 }}>{d.title}</Txt>
           <Meta style={{ marginTop: 3 }}>{d.by}{hideUnit(d.by) ? '' : ' · ' + d.unit} · {d.when}</Meta>
           <Txt style={{ fontSize: 13.5, color: C.ink2, marginTop: 10, lineHeight: 21 }}>{d.body}</Txt>
           {open && <Reactions d={d} />}
         </Card>
 
         <Sect title={t('post.comments', { n: d.comments })} />
-        {earlier > 0 && <Meta style={s.earlier}>{t('post.earlier', { n: earlier })}</Meta>}
+        {earlier > 0 && (
+          <Pressable onPress={() => setAll(true)} hitSlop={8} accessibilityRole="button" style={s.earlierBtn}>
+            <Icon name="chevron-up" size={15} color={C.acc} />
+            <Txt w={700} style={{ fontSize: 12.5, color: C.acc }}>{t('post.earlier', { n: earlier })}</Txt>
+          </Pressable>
+        )}
         {!thread.length && <Meta style={s.earlier}>{t('post.noReplies')}</Meta>}
-        {thread.map((r, i) => {
+        {shown.map((r, i) => {
           const mine = r.by === ME.name;
           return (
             <FadeIn key={r.id} delay={Math.min(i, 6) * 50}>
               <View style={s.reply}>
                 <View style={[s.av, mine && { backgroundColor: C.aiBg }]}>
-                  <Txt w={800} style={{ fontSize: 11.5, color: mine ? C.ai : C.acc }}>{initials(r.by)}</Txt>
+                  <Txt w={800} style={{ fontSize: 12, color: mine ? C.ai : C.acc }}>{initials(r.by)}</Txt>
                 </View>
                 <View style={[s.bubble, r.held && s.bubbleHeld]}>
                   <Txt w={700} style={{ fontSize: 12 }}>
                     {mine ? t('common.you') : r.by}
-                    <Txt style={{ fontSize: 11, color: C.ink3 }}>{hideUnit(r.by) ? '' : '  ' + r.unit} · {r.when}</Txt>
+                    <Txt style={{ fontSize: 12, color: C.ink3 }}>{hideUnit(r.by) ? '' : '  ' + r.unit} · {r.when}</Txt>
                   </Txt>
-                  <Txt style={{ fontSize: 13, lineHeight: 19, marginTop: 3 }}>{r.text}</Txt>
+                  <Txt style={{ fontSize: 13, lineHeight: 19, marginTop: 3, paddingRight: 18 }}>{r.text}</Txt>
+                  <Pressable onPress={() => menu('reply', r.id, r.by, r.unit, r.text)} hitSlop={12} accessibilityLabel={t('menu.more')} style={s.moreReply}>
+                    <Icon name="ellipsis-horizontal" size={16} color={C.ink3} />
+                  </Pressable>
                   {r.held && <Meta style={{ color: C.warn, marginTop: 4 }}>{t('post.heldReply')}</Meta>}
                 </View>
               </View>
@@ -108,6 +141,9 @@ export default function DiscussionDetail() {
 
 const s = StyleSheet.create({
   earlier: { paddingHorizontal: 18, paddingVertical: 4 },
+  more: { position: 'absolute', top: 6, right: 6, width: 40, height: 40, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  moreReply: { position: 'absolute', top: 2, right: 2, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  earlierBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 18, paddingVertical: 8, minHeight: 40 },
   reply: { flexDirection: 'row', gap: 9, paddingHorizontal: 14, paddingVertical: 5 },
   av: { width: 32, height: 32, borderRadius: 16, backgroundColor: C.accBg, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   bubble: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, borderRadius: 14, borderTopLeftRadius: 4, paddingVertical: 9, paddingHorizontal: 12 },

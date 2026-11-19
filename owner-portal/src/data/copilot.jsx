@@ -1,17 +1,20 @@
-/* Portfolio Copilot — answers only from the records in this portal, suggests but never acts.
+/* Trinize Assistant — answers only from the records in this portal, suggests but never acts.
    Messages render inside a white-space:pre-wrap bubble, so '\n' strings are real line breaks. */
+import { LIVE } from '../lib/api';
+import { LIVE_INTRO, liveAnswer } from './insights';
 import { findAssoc, health } from './portal';
 
 const score = id => health(findAssoc(id)).score;
 const DEFAULT_CHIPS = ['What needs me today?', 'Which renewal is most at risk?', 'Draft the renewal email for Prestige', 'Why is Green Meadows at risk?'];
 
-export const COPILOT_INTRO = {
+export const COPILOT_INTRO = LIVE ? LIVE_INTRO : {
   who: 'ai',
   t: 'I read your account records — associations, subscriptions, invoices and support issues. I can explain what I see and draft messages, but I never send anything or change an account on my own.',
   chips: DEFAULT_CHIPS,
 };
 
 export function copilotAnswer(text) {
+  if (LIVE) return liveAnswer(text);
   const q = text.toLowerCase();
 
   if (q.includes('today') || q.includes('need me') || q.includes('priorit')) return {

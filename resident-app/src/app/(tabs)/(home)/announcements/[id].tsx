@@ -1,7 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
-import { View } from 'react-native';
+import { useEffect } from 'react';
+import { Linking, View } from 'react-native';
 import { Btn, Card, EmptyState, Header, Icon, IconTile, Meta, Pill, Row, Screen, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
+import { LIVE } from '@/lib/api';
+import { seenLive } from '@/lib/live';
 import { TODAY } from '@/store/data';
 import { useStore } from '@/store/store';
 import { C } from '@/theme';
@@ -11,6 +14,9 @@ export default function AnnouncementDetail() {
   const { state, actions } = useStore();
   const { t } = useT();
   const a = state.announcements.find(x => x.id === id);
+  const found = !!a;
+  // opening a notice is what the office sees as "read"
+  useEffect(() => { if (LIVE && found) void seenLive(id); }, [id, found]);
 
   if (!a) return <Screen header={<Header title={t('ann.title')} back="/announcements" />}><EmptyState icon="megaphone-outline" title={t('ann.nf.t')} body={t('ann.nf.b')} /></Screen>;
 
@@ -20,6 +26,7 @@ export default function AnnouncementDetail() {
         <Row style={{ marginBottom: 6 }}>
           {a.pri === 'High' ? <Pill tone="bad">{t('ann.important')}</Pill> : <Pill tone="dim">{t('ann.notice')}</Pill>}
           <Pill tone="acc">{a.aud}</Pill>
+          {a.pinned && <Pill tone="warn">{t('ann.pinned')}</Pill>}
           {a.acked && <Pill tone="good">{t('ann.acknowledged')}</Pill>}
         </Row>
         <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -30,6 +37,8 @@ export default function AnnouncementDetail() {
           </View>
         </View>
         <Txt style={{ fontSize: 13, color: C.ink2, marginTop: 10, lineHeight: 21 }}>{a.body}</Txt>
+        {!!a.attach && <Btn variant="soft" icon="attach" label={a.attach.name || t('ann.attachment')} onPress={() => Linking.openURL(a.attach!.url)} style={{ marginTop: 12, alignSelf: 'flex-start' }} />}
+        {!!a.until && <Meta style={{ marginTop: 10 }}>{t('ann.until', { date: a.until })}</Meta>}
       </Card>
 
       {a.ack ? (a.acked ? (
@@ -37,7 +46,7 @@ export default function AnnouncementDetail() {
           <Icon name="checkmark-circle" size={22} color={C.good} />
           <View>
             <Txt w={700} style={{ fontSize: 12.5, color: C.good }}>{t('ann.youAcked')}</Txt>
-            <Meta>{t('ann.recorded', { date: TODAY })}</Meta>
+            <Meta>{t('ann.recorded', { date: a.ackedOn ?? TODAY })}</Meta>
           </View>
         </Card>
       ) : (

@@ -4,6 +4,8 @@ import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, View } from 'react-
 import { useUI } from '@/components/Overlay';
 import { Btn, Header, Icon, IconTile, Input, Meta, Pill, Screen, Txt } from '@/components/ui';
 import type { Tone } from '@/store/data';
+import { LIVE } from '@/lib/api';
+import { rewriteLive } from '@/lib/live2';
 import { rewrite, TONE_META, type Safety } from '@/store/logic';
 import { useT } from '@/i18n';
 import { useStore } from '@/store/store';
@@ -22,10 +24,19 @@ export default function Compose() {
   const tones = (Object.keys(state.ai.tones) as Tone[]).filter(tn => state.ai.tones[tn]);
   const toneOn = state.ai.toneRewrite && tones.length > 0;
 
+  /** the instant on-phone rewrite shows first; the server's (GPT when connected) replaces it when it arrives */
+  const suggest = (tn: Tone) => {
+    const asked = text;
+    const quick = rewrite(asked, tn);
+    setSuggestion(quick);
+    // only swap it in if the resident hasn't moved on to another tone or edited the draft meanwhile
+    if (LIVE) rewriteLive(asked, tn).then(better => setSuggestion(cur => (cur === quick ? better : cur))).catch(() => {});
+  };
+
   const pickTone = (tn: Tone) => {
     if (!text.trim()) { toast(t('compose.writeFirst'), 'create'); return; }
     setTone(tn);
-    setSuggestion(rewrite(text, tn));
+    suggest(tn);
     actions.markTried('tone');
   };
 
@@ -40,7 +51,7 @@ export default function Compose() {
   const guardRewrite = () => {
     const tn: Tone = tones.includes('Polite') ? 'Polite' : (tones[0] ?? 'Polite');
     setTone(tn);
-    setSuggestion(rewrite(text, tn));
+    suggest(tn);
     setGuard(null);
   };
 
@@ -62,7 +73,7 @@ export default function Compose() {
             <>
               <View style={s.toneHead}>
                 <Icon name="sparkles" size={14} color={C.ai} />
-                <Txt w={700} style={{ fontSize: 11.5, color: C.ink2 }}>{t('compose.aiHead')}</Txt>
+                <Txt w={700} style={{ fontSize: 12, color: C.ink2 }}>{t('compose.aiHead')}</Txt>
                 <Pill tone="ai">{t('compose.suggestsOnly')}</Pill>
               </View>
               {tones.map(tn => (
@@ -108,7 +119,7 @@ export default function Compose() {
               <Btn variant="ghost" label={t('guard.edit')} onPress={() => setGuard(null)} />
               {guard.level !== 'block' && (
                 <Pressable onPress={postHeld} style={{ marginTop: 12, alignSelf: 'center' }}>
-                  <Txt w={600} style={{ fontSize: 11.5, color: C.ink3, textDecorationLine: 'underline' }}>{t('guard.anyway')}</Txt>
+                  <Txt w={600} style={{ fontSize: 12, color: C.ink3, textDecorationLine: 'underline' }}>{t('guard.anyway')}</Txt>
                 </Pressable>
               )}
             </View>
@@ -124,7 +135,7 @@ const s = StyleSheet.create({
   opt: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1.5, borderColor: C.line, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginVertical: 4, backgroundColor: '#fff' },
   optSel: { borderColor: C.acc, backgroundColor: C.accBg },
   suggest: { borderWidth: 1, borderStyle: 'dashed', borderColor: '#C7CCF8', backgroundColor: C.aiBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginVertical: 8 },
-  suggestLbl: { fontSize: 10, letterSpacing: 0.8, color: C.ai, marginBottom: 4 },
+  suggestLbl: { fontSize: 12, letterSpacing: 0.6, color: C.ai, marginBottom: 4 },
   veil: { flex: 1, backgroundColor: 'rgba(6,10,18,.45)', justifyContent: 'center', paddingHorizontal: 18 },
   guard: { backgroundColor: '#fff', borderRadius: 20, paddingTop: 22, paddingHorizontal: 18, paddingBottom: 18, elevation: 14, shadowColor: '#171331', shadowOpacity: 0.28, shadowRadius: 30, shadowOffset: { width: 0, height: 26 } },
 });

@@ -5,16 +5,13 @@ import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-nat
 import { useUI } from '@/components/Overlay';
 import { Btn, Card, CountUp, FadeIn, Header, Icon, IconTile, Meta, Screen, Txt, type IconName } from '@/components/ui';
 import { useT, type Key } from '@/i18n';
-import { ME, SOCIETY } from '@/store/data';
+import { ME, myStats, SOCIETY } from '@/store/data';
 import { useStore } from '@/store/store';
+import { usePullRefresh } from '@/lib/refresh';
 import { C, GRAD } from '@/theme';
 
 export type ImpactFocus = 'gratitudes' | 'chats' | 'days';
 
-/** Demo activity for the last 14 days, oldest first — 1 = opened the app that day. */
-const LAST_14 = [1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1];
-const BEST_STREAK = 12;
-const streak = () => { let n = 0; for (let i = LAST_14.length - 1; i >= 0 && LAST_14[i]; i--) n++; return n; };
 
 function SectionHead({ icon, bg, fg, title, body }: { icon: IconName; bg: string; fg: string; title: string; body: string }) {
   return (
@@ -35,15 +32,22 @@ export default function Impact() {
   const { openSheet } = useUI();
   const { t, tx } = useT();
   const scroll = useRef<ScrollViewInstance>(null);
+  const refreshControl = usePullRefresh();
   const [ys, setYs] = useState<Partial<Record<ImpactFocus, number>>>({});
   const jumped = useRef(false);
 
   const sent = state.gratitudes.filter(g => g.by === ME.name);
-  const asked = state.chat.log.flatMap(m => (m.who === 'me' ? [m.text] : [])).slice(-4).reverse();
+  // newest first: today's chat, then earlier sessions — the same records the count is made from
+  // connected, the server keeps the questions and hands back the newest few
+  const asked = state.me.chats !== null ? state.me.pastChats.slice(0, 4)
+    : [...state.me.pastChats, ...state.chat.log.flatMap(m => (m.who === 'me' ? [m.text] : []))].slice(-4).reverse();
+  const last14 = state.me.last14;
+  const daysN = (n: number) => (n === 1 ? t('impact.day1') : t('impact.daysN', { n }));
+  const my = myStats(state);
   const stats: [ImpactFocus, IconName, number, Key][] = [
-    ['gratitudes', 'heart', state.me.gratitudes, 'home.impact.gratitudes'],
-    ['chats', 'chatbubble-ellipses', state.me.chats, 'home.impact.chats'],
-    ['days', 'flame', state.me.days, 'home.impact.days'],
+    ['gratitudes', 'heart', my.gratitudes, 'home.impact.gratitudes'],
+    ['chats', 'chatbubble-ellipses', my.chats, 'home.impact.chats'],
+    ['days', 'flame', my.days, 'home.impact.days'],
   ];
 
   // jump once to the card that was tapped on Home, as soon as its section has been laid out
@@ -62,7 +66,7 @@ export default function Impact() {
 
   return (
     <Screen scroll={false} header={<Header title={t('home.impact')} back="/" bell />}>
-      <ScrollView ref={scroll} contentContainerStyle={{ paddingBottom: 18 }}>
+      <ScrollView ref={scroll} contentContainerStyle={{ paddingBottom: 18 }} refreshControl={refreshControl}>
         <FadeIn>
           <LinearGradient colors={GRAD.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
             <Txt w={700} style={{ color: '#fff', fontSize: 13.5, lineHeight: 20 }}>{t('impact.hero', { society: SOCIETY.short })}</Txt>
@@ -71,7 +75,7 @@ export default function Impact() {
                 <View key={k} style={[s.heroStat, focus === k && s.heroStatOn]}>
                   <Icon name={ic} size={16} color="#fff" />
                   <CountUp value={n} style={{ fontSize: 18, color: '#fff' }} />
-                  <Txt w={600} style={{ fontSize: 9.5, color: 'rgba(255,255,255,.85)', textAlign: 'center' }}>{t(label)}</Txt>
+                  <Txt w={600} style={{ fontSize: 11, color: 'rgba(255,255,255,.92)', textAlign: 'center' }}>{t(label)}</Txt>
                 </View>
               ))}
             </View>
@@ -118,17 +122,17 @@ export default function Impact() {
             <View style={s.streaks}>
               <View style={s.streakBox}>
                 <Meta>{t('impact.streak')}</Meta>
-                <Txt w={800} style={{ fontSize: 16, color: '#D97706' }}>{t('impact.daysN', { n: streak() })}</Txt>
+                <Txt w={800} style={{ fontSize: 16, color: '#D97706' }}>{daysN(state.me.streak)}</Txt>
               </View>
               <View style={s.streakBox}>
                 <Meta>{t('impact.best')}</Meta>
-                <Txt w={800} style={{ fontSize: 16 }}>{t('impact.daysN', { n: BEST_STREAK })}</Txt>
+                <Txt w={800} style={{ fontSize: 16 }}>{daysN(state.me.best)}</Txt>
               </View>
             </View>
             <Txt w={800} style={s.small}>{t('impact.last14').toUpperCase()}</Txt>
             <View style={s.grid}>
-              {LAST_14.map((on, i) => (
-                <View key={i} style={[s.day, on ? s.dayOn : null, i === LAST_14.length - 1 && s.today]}>
+              {last14.map((on, i) => (
+                <View key={i} style={[s.day, on ? s.dayOn : null, i === last14.length - 1 && s.today]}>
                   {!!on && <Icon name="flame" size={12} color="#fff" />}
                 </View>
               ))}
@@ -148,7 +152,7 @@ const s = StyleSheet.create({
   focused: { borderColor: C.accBorder },
   head: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 8 },
   item: { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line },
-  small: { fontSize: 10, letterSpacing: 0.8, color: C.ink3, marginTop: 6, marginBottom: 4 },
+  small: { fontSize: 12, letterSpacing: 0.6, color: C.ink3, marginTop: 6, marginBottom: 4 },
   q: { flexDirection: 'row', gap: 8, paddingVertical: 5 },
   streaks: { flexDirection: 'row', gap: 8 },
   streakBox: { flex: 1, backgroundColor: C.bg, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 11 },

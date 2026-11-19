@@ -26,6 +26,9 @@ export default function Login() {
   const { toast } = useUI();
   const { t, tr } = useT();
   const [phone, setPhone] = useState('');
+  /** why the server refused this number (not registered, awaiting verification…) — stays under the field until the number changes */
+  const [refused, setRefused] = useState<{ phone: string; why: string } | null>(null);
+  const why = refused?.phone === phone ? refused.why : '';
   const [focused, setFocused] = useState(false);
   const [sending, setSending] = useState(false);
   const scroll = useRef<ScrollViewInstance>(null);
@@ -53,8 +56,10 @@ export default function Login() {
   async function submit() {
     if (!valid || sending) return;
     setSending(true);
-    await requestOtp(phone);
+    const r = await requestOtp(phone);
     setSending(false);
+    // the server says why (not registered, too many codes, offline) — stay here and show it
+    if (!r.ok) { const msg = r.message ?? t('login.failed'); setRefused({ phone, why: msg }); toast(msg, 'alert-circle'); return; }
     toast(t('login.sent', { phone: formatPhone(phone) }), 'chatbubble-ellipses');
     router.push('/otp');
   }
@@ -71,7 +76,7 @@ export default function Login() {
               <BrandMark size={34} />
               <View style={{ flex: 1 }}>
                 <Txt w={800} style={{ color: '#fff', fontSize: 17 }}>Trinize</Txt>
-                <Txt style={{ color: 'rgba(255,255,255,.82)', fontSize: 11.5 }} numberOfLines={1}>{t('splash.foot')}</Txt>
+                <Txt style={{ color: 'rgba(255,255,255,.82)', fontSize: 12 }} numberOfLines={1}>{t('splash.foot')}</Txt>
               </View>
             </LinearGradient>
           </FadeIn>
@@ -125,8 +130,6 @@ export default function Login() {
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               onSubmitEditing={submit}
-              placeholder="98765 43210"
-              placeholderTextColor={C.ink3}
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
               autoComplete="tel"
@@ -139,7 +142,9 @@ export default function Login() {
           </View>
           {showError
             ? <Txt w={600} style={s.error}>{t('login.error')}</Txt>
-            : <Txt style={s.hint}>{t('login.hint')}</Txt>}
+            : why
+              ? <View style={s.refused} accessibilityRole="alert"><Icon name="alert-circle" size={18} color={C.bad} /><Txt w={600} style={s.refusedText}>{why}</Txt></View>
+              : <Txt style={s.hint}>{t('login.hint')}</Txt>}
 
           <Pressable
             onPress={submit}
@@ -162,8 +167,8 @@ export default function Login() {
           {!kb && <View style={{ flex: 1 }} />}
           <Txt style={[s.terms, kb && { marginTop: 16 }]}>
             {tr('login.terms', {
-              terms: <Txt w={700} style={s.link}>{t('login.termsLink')}</Txt>,
-              privacy: <Txt w={700} style={s.link}>{t('login.privacyLink')}</Txt>,
+              terms: <Txt w={700} style={s.link} accessibilityRole="link" onPress={() => router.push('/legal/terms')}>{t('login.termsLink')}</Txt>,
+              privacy: <Txt w={700} style={s.link} accessibilityRole="link" onPress={() => router.push('/legal/privacy')}>{t('login.privacyLink')}</Txt>,
             })}
           </Txt>
         </Animated.View>
@@ -183,7 +188,7 @@ const s = StyleSheet.create({
     position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 5, zIndex: 2,
     backgroundColor: 'rgba(255,255,255,.18)', borderWidth: 1, borderColor: 'rgba(255,255,255,.28)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6,
   },
-  chipText: { color: '#fff', fontSize: 11.5 },
+  chipText: { color: '#fff', fontSize: 12 },
   headline: { color: '#fff', fontSize: 26, lineHeight: 32, marginTop: 8 },
   sub: { color: 'rgba(255,255,255,.85)', fontSize: 13, lineHeight: 19, marginTop: 8 },
   body: { flex: 1, paddingHorizontal: 24, paddingTop: 26 },
@@ -197,12 +202,14 @@ const s = StyleSheet.create({
   fieldError: { borderColor: C.bad },
   cc: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, alignSelf: 'stretch', borderRightWidth: 1, borderRightColor: C.line },
   input: { flex: 1, fontSize: 17, letterSpacing: 1, color: C.ink, paddingHorizontal: 14, paddingVertical: 14, ...font(700) },
-  hint: { fontSize: 11.5, color: C.ink3, marginTop: 8 },
-  error: { fontSize: 11.5, color: C.bad, marginTop: 8 },
+  hint: { fontSize: 12, color: C.ink3, marginTop: 8 },
+  error: { fontSize: 12, color: C.bad, marginTop: 8 },
+  refused: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: C.badBg, borderRadius: 12, padding: 12, marginTop: 10 },
+  refusedText: { flex: 1, fontSize: 13, lineHeight: 19, color: C.bad },
   cta: { marginTop: 22, height: 54, borderRadius: 14, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.acc },
   ctaText: { color: '#fff', fontSize: 15.5 },
   secure: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14 },
-  secureText: { fontSize: 11.5, color: C.ink3 },
-  terms: { fontSize: 11.5, color: C.ink3, textAlign: 'center', lineHeight: 17, marginTop: 24 },
-  link: { fontSize: 11.5, color: C.acc },
+  secureText: { fontSize: 12, color: C.ink3 },
+  terms: { fontSize: 12, color: C.ink3, textAlign: 'center', lineHeight: 17, marginTop: 24 },
+  link: { fontSize: 12, color: C.acc },
 });

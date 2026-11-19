@@ -8,10 +8,10 @@ const ROWS = [
   ['Renewal dates in a list', <><b>Renewal runway</b> — every account scored on adoption, payment, usage slope and tickets, ordered by days left</>, 'A date tells you when; a health score tells you whether to worry'],
   ['Association cards showing plan & plots', <><b>Health-first cards</b>, sorted worst-first, each leading with the number that explains its score</>, 'The account needing you should not be alphabetically fourth'],
   ['Association page = static facts', <><b>Association 360</b> — adoption curve, account timeline, invoices, tickets and committee on one screen</>, 'Everything you need before a renewal call, without five tabs'],
-  ['Invoices listed by date', <><b>Collections</b> with a chase action per invoice and a copilot chase plan that reads account health</>, 'Chasing money from a churning account needs a different message'],
+  ['Invoices listed by date', <><b>Collections</b> with a chase action per invoice and an assistant chase plan that reads account health</>, 'Chasing money from a churning account needs a different message'],
   ['Support issues sorted by age', <><b>SLA-first ordering</b> with breached and unassigned surfaced as their own filters</>, 'Age is not urgency'],
   ['Modules = a capability list', <><b>Plan simulator</b> — pick a tier, see exactly what an account gains, plus modelled upsell headroom</>, 'Turns a catalog into a revenue tool'],
-  ['AI business summary, read-only', <><b>Portfolio copilot</b> you can ask follow-ups and ask to draft the actual email</>, 'Suggest-only, but useful rather than decorative'],
+  ['AI business summary, read-only', <><b>Trinize Assistant</b> you can ask follow-ups and ask to draft the actual email</>, 'Suggest-only, but useful rather than decorative'],
   ['Navigate by clicking through menus', <><b>⌘K command palette</b> across accounts, invoices, issues and pages</>, 'Operators live in keyboards'],
   ['Deep links 404 on refresh', <><b>Every view is linkable</b> and survives a reload</>, <>The live site's /owner link 404s today — one <b>_redirects</b> line fixes it</>],
 ];

@@ -1,0 +1,1 @@
+ALTER TABLE "ai_settings" ADD COLUMN "auto_hold" text DEFAULT 'Medium & above' NOT NULL;

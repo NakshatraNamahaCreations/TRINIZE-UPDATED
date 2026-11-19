@@ -13,6 +13,23 @@ npm run build    # production build in dist/
 npm run lint     # oxlint
 ```
 
+## Connect to the API
+
+By default the portal runs on built-in demo data. To run it against the backend, create `owner-portal/.env.local`:
+
+```
+VITE_API_URL=http://localhost:4000
+```
+
+and make sure the address the portal is served from is in `CORS_ORIGINS` in `backend/.env`. Connected, the portal:
+
+- signs operators in against the API (society admins are refused; two-step sign-in is asked for when it is on)
+- reads every page from `/v1/ops/*` and refreshes once a minute
+- saves what you do: payment reminders and payments, ticket assignment / reply / resolve, plan and state changes, onboarding a society
+- **Property managers**: create a VPM, choose their societies, change or remove them — they sign in on the mobile app with their mobile number
+
+Seeded operator login: `ravi.kulkarni@trinize.com` / `Trinize@2026`.
+
 ## Sign in
 
 Every screen sits behind `/login`. Demo account (fictional): **ravi.kulkarni@trinize.com** / **Trinize@2026**

@@ -1,5 +1,5 @@
-import type { Icon as IconType } from '@phosphor-icons/react';
-import type { ReactNode } from 'react';
+import { X, type Icon as IconType } from '@phosphor-icons/react';
+import { useEffect, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { avatarColor, initials, type PillTone } from '../lib/format';
 
 export const Pill = ({ tone, children, dot }: { tone: PillTone; children: ReactNode; dot?: boolean }) =>
@@ -40,6 +40,18 @@ export function Empty({ icon: Icon, title, body }: { icon: IconType; title: stri
   );
 }
 
+/**
+ * An action in a table row, as an icon. Its name shows when the pointer rests on it (or the keyboard reaches it),
+ * and is what a screen reader says. On a phone, where nothing hovers, the name is written beside the icon.
+ */
+export function IconBtn({ icon: Icon, label, tone, primary, className, ...rest }: { icon: IconType; label: string; tone?: 'danger' | 'good'; primary?: boolean } & ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button type="button" {...rest} className={'ibtn' + (primary ? ' primary' : '') + (tone ? ' ' + tone : '') + (className ? ' ' + className : '')} aria-label={label} data-tip={label}>
+      <Icon size={17} /><span className="ibtn-l">{label}</span>
+    </button>
+  );
+}
+
 /** Small stat chip used in page summaries. */
 export function Stat({ label, value, tone, icon: Icon }: { label: string; value: number | string; tone?: PillTone; icon?: IconType }) {
   return (
@@ -63,6 +75,30 @@ export function PanelHead({ icon: Icon, title, sub, tone = 'acc', right }: { ico
       {right}
     </div>
   );
+}
+
+/** Side panel for one record's full detail. Closes on Escape or a click outside. */
+export function Drawer({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+  }, [onClose]);
+  return (
+    <>
+      <div className="drawer-veil" onClick={onClose} />
+      <aside className="drawer" role="dialog" aria-modal="true" aria-label={label}>
+        <button className="d-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
+        {children}
+      </aside>
+    </>
+  );
+}
+
+/** Labelled facts in a two-column grid — the top of a detail drawer. */
+export function Facts({ items }: { items: Record<string, ReactNode> }) {
+  return <div className="kv">{Object.entries(items).map(([k, v]) => <div key={k}><span>{k}</span><b>{v}</b></div>)}</div>;
 }
 
 /** Rounded tinted square holding an icon — list rows, table cells. */

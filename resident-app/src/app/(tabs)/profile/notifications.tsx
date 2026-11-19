@@ -37,7 +37,7 @@ export default function NotificationSettings() {
           <IconTile name="notifications-off-outline" size={40} radius={12} bg="#fff" fg={C.warn} />
           <View style={{ flex: 1 }}>
             <Txt w={700} style={{ fontSize: 13 }}>{perm === 'unavailable' ? t('ns.unavailable') : t('ns.permOff.t')}</Txt>
-            {perm !== 'unavailable' && <Txt style={{ fontSize: 11.5, color: C.ink2, marginTop: 2, lineHeight: 17 }}>{t(perm === 'denied' ? 'ns.denied' : 'ns.permOff.b')}</Txt>}
+            {perm !== 'unavailable' && <Txt style={{ fontSize: 12, color: C.ink2, marginTop: 2, lineHeight: 17 }}>{t(perm === 'denied' ? 'ns.denied' : 'ns.permOff.b')}</Txt>}
             {perm !== 'unavailable' && <Btn label={t(perm === 'denied' ? 'ns.openSettings' : 'ns.allow')} onPress={allow} style={{ alignSelf: 'flex-start', marginTop: 8 }} />}
           </View>
         </Card>
@@ -49,7 +49,8 @@ export default function NotificationSettings() {
         <ToggleRow icon="calendar-outline" title={t('ns.events.t')} sub={t('ns.events.s')} value={n.events} onChange={() => actions.toggleNotif('events')} />
         <ToggleRow icon="bar-chart-outline" title={t('ns.polls.t')} sub={t('ns.polls.s')} value={n.polls} onChange={() => actions.toggleNotif('polls')} />
         <ToggleRow icon="chatbubbles-outline" title={t('ns.discussions.t')} sub={t('ns.discussions.s')} value={n.discussions} onChange={() => actions.toggleNotif('discussions')} />
-        <ToggleRow icon="heart-outline" title={t('ns.gratitude.t')} sub={t('ns.gratitude.s')} value={n.gratitude} onChange={() => actions.toggleNotif('gratitude')} last />
+        <ToggleRow icon="heart-outline" title={t('ns.gratitude.t')} sub={t('ns.gratitude.s')} value={n.gratitude} onChange={() => actions.toggleNotif('gratitude')} />
+        <ToggleRow icon="pricetag-outline" title={t('ns.promos.t')} sub={t('ns.promos.s')} value={n.promos ?? true} onChange={() => actions.toggleNotif('promos')} last />
       </Card>
 
       <Sect title={t('ns.mine')} />

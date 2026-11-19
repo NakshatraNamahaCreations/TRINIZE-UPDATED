@@ -4,13 +4,19 @@ import { mergeTimeline } from '../lib/timeline';
 import { NEXT_LABEL, VENDORS, type Issue } from '../store/data';
 import { useStore } from '../store/context';
 import { priTone } from '../lib/format';
+import { LIVE } from '../lib/api';
+import { liveVendors } from '../lib/live';
 import { Pill } from './ui';
+import { WorkOrderPanel } from './WorkOrderPanel';
 
 export function IssueDrawer({ issue: i, onClose }: { issue: Issue; onClose: () => void }) {
   const { actions } = useStore();
   const [note, setNote] = useState('');
   const [internal, setInternal] = useState(false);
-  const [vendor, setVendor] = useState(VENDORS[1]);
+  // connected, the choices are the society's own vendors from the server
+  // connected, only this society's own vendors — an empty list when it has none yet, never the demo's
+  const vendors = LIVE ? liveVendors() : VENDORS;
+  const [vendor, setVendor] = useState(vendors[1] ?? vendors[0]);
   const resolved = i.status === 'Resolved' || i.status === 'Closed';
   const next = NEXT_LABEL[i.status];
 
@@ -63,6 +69,8 @@ export function IssueDrawer({ issue: i, onClose }: { issue: Issue; onClose: () =
           ))}
         </div>
 
+        {LIVE && <WorkOrderPanel issueRef={i.id} />}
+
         {resolved ? (
           <div className="flow-note" style={{ marginTop: 14 }}>Resolved · resident was asked to rate the fix privately. Reopening returns it to the queue.</div>
         ) : (
@@ -71,7 +79,7 @@ export function IssueDrawer({ issue: i, onClose }: { issue: Issue; onClose: () =
             {i.status === 'Acknowledged' && (
               <div style={{ marginBottom: 8 }}>
                 <select className="a-in" value={vendor} onChange={e => setVendor(e.target.value)} aria-label="Vendor to assign">
-                  {VENDORS.map(v => <option key={v}>{v}</option>)}
+                  {vendors.map(v => <option key={v}>{v}</option>)}
                 </select>
               </div>
             )}

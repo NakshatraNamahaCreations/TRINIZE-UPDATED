@@ -1,17 +1,25 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { api, ApiError, bindTokens, LIVE, setTokens, type Tokens } from '@/lib/api';
 import { saveAuth, type SavedAuth } from '@/lib/persist';
 
-/** Mocked OTP — any real build swaps these two calls for the SMS provider's API. */
+/** Demo mode only (no EXPO_PUBLIC_API_URL): the one code that works. With the API, codes come by SMS. */
 export const DEMO_OTP = '123456';
 export const OTP_LENGTH = 6;
 export const RESEND_SECONDS = 30;
 
+/** ok, or the reason to show the resident */
+export type Outcome = { ok: true } | { ok: false; message?: string };
+
+export type Role = 'resident' | 'vpm' | 'guard';
+
 type Auth = {
   signedIn: boolean;
+  /** which app this number gets: the resident tabs, the property manager's societies, or the guard's gate */
+  role: Role;
   /** 10-digit number awaiting verification, or the signed-in number */
   phone: string;
-  requestOtp: (phone: string) => Promise<void>;
-  verifyOtp: (code: string) => Promise<boolean>;
+  requestOtp: (phone: string) => Promise<Outcome>;
+  verifyOtp: (code: string) => Promise<Outcome>;
   /** Swaps the auth stack for the app — screens call it after their success animation. */
   completeSignIn: () => void;
   signOut: () => void;
@@ -19,28 +27,67 @@ type Auth = {
 
 const AuthCtx = createContext<Auth | null>(null);
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+const failed = (e: unknown): Outcome => ({ ok: false, message: e instanceof ApiError ? e.message : undefined });
 
 export function AuthProvider({ initial, children }: { initial?: SavedAuth; children: ReactNode }) {
   const [signedIn, setSignedIn] = useState(initial?.signedIn ?? false);
   const [phone, setPhone] = useState(initial?.phone ?? '');
+  const [tokens, setTok] = useState<Tokens | null>(initial?.tokens ?? null);
+  const [role, setRole] = useState<Role>(initial?.role ?? 'resident');
   // stay signed in across restarts; the phone is kept so OTP and Profile can show it
-  useEffect(() => { saveAuth({ signedIn, phone }); }, [signedIn, phone]);
+  useEffect(() => { saveAuth({ signedIn, phone, tokens, role }); }, [signedIn, phone, tokens, role]);
 
-  const requestOtp = useCallback(async (p: string) => {
-    await wait(700);
-    setPhone(p);
+  // the API client refreshes tokens on its own; when the server ends the session, so do we
+  useState(() => bindTokens(initial?.tokens ?? null, t => {
+    setTok(t);
+    if (!t) { setSignedIn(false); setPhone(''); }
+  }));
+
+  const requestOtp = useCallback(async (p: string): Promise<Outcome> => {
+    if (!LIVE) { await wait(700); setPhone(p); return { ok: true }; }
+    try {
+      await api('POST', '/v1/auth/otp/request', { phone: p }, { auth: false });
+      setPhone(p);
+      return { ok: true };
+    } catch (e) {
+      return failed(e);
+    }
   }, []);
 
-  const verifyOtp = useCallback(async (code: string) => {
-    await wait(600);
-    return code === DEMO_OTP;
-  }, []);
+  const verifyOtp = useCallback(async (code: string): Promise<Outcome> => {
+    if (!LIVE) { await wait(600); return code === DEMO_OTP ? { ok: true } : { ok: false }; }
+    try {
+      const s = await api<{ accessToken: string; refreshToken: string }>('POST', '/v1/auth/otp/verify', { phone, code }, { auth: false });
+      setTokens({ access: s.accessToken, refresh: s.refreshToken });
+      // a Virtual Property Manager's number (created by the operator) gets the manager's app
+      // …and a security guard's number (added by the society office) gets the gate
+      let next: Role = 'resident';
+      try { await api('GET', '/v1/me'); } catch (e) {
+        if (e instanceof ApiError && e.status === 403) {
+          try { await api('GET', '/v1/vpm/me'); next = 'vpm'; } catch {
+            try { await api('GET', '/v1/gate/me'); next = 'guard'; } catch { /* none of them: the resident screens explain */ }
+          }
+        }
+      }
+      setRole(next);
+      return { ok: true };
+    } catch (e) {
+      return failed(e);
+    }
+  }, [phone]);
 
   const value = useMemo<Auth>(() => ({
-    signedIn, phone, requestOtp, verifyOtp,
+    signedIn, phone, role, requestOtp, verifyOtp,
     completeSignIn: () => setSignedIn(true),
-    signOut: () => { setSignedIn(false); setPhone(''); },
-  }), [signedIn, phone, requestOtp, verifyOtp]);
+    signOut: () => {
+      // tell the server to end this device's session; signing out locally doesn't wait for it
+      if (LIVE && tokens) api('POST', '/v1/auth/logout', { refreshToken: tokens.refresh }, { auth: false }).catch(() => {});
+      setTokens(null);
+      setSignedIn(false);
+      setPhone('');
+      setRole('resident');
+    },
+  }), [signedIn, phone, role, tokens, requestOtp, verifyOtp]);
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

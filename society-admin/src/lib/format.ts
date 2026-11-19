@@ -2,7 +2,7 @@ import type { Issue, ModItem, User } from '../store/data';
 
 export type PillTone = 'good' | 'warn' | 'bad' | 'acc' | 'dim';
 
-export const priTone = (p: Issue['pri']): PillTone => (p === 'High' ? 'bad' : p === 'Low' ? 'dim' : 'warn');
+export const priTone = (p: Issue['pri']): PillTone => (p === 'High' || p === 'Emergency' ? 'bad' : p === 'Low' ? 'dim' : 'warn');
 export const slaTone = (s: Issue['slaState']): PillTone => (s === 'over' ? 'bad' : s === 'met' ? 'good' : 'dim');
 export const statusTone = (s: Issue['status']): PillTone => (s === 'Resolved' || s === 'Closed' ? 'good' : s === 'Submitted' ? 'dim' : 'acc');
 export const sevTone = (s: ModItem['sev']): PillTone => (s === 'High' ? 'bad' : s === 'Medium' ? 'warn' : 'dim');

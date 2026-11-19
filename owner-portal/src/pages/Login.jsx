@@ -1,14 +1,15 @@
-import { ArrowRight, CircleAlert, Eye, EyeOff, Info, LoaderCircle, Lock, Mail, TrendingUp } from 'lucide-react';
+import { ArrowRight, CircleAlert, Eye, EyeOff, Info, KeyRound, LoaderCircle, Lock, Mail, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { Icon3D } from '../components/Icon3D';
 import { ASSOC, bandColor, DEMO_LOGIN, fmtL, health, MRR } from '../data/portal';
+import { LIVE } from '../lib/api';
 import { useAuth } from '../store/context';
 
 const FEATURES = [
   ['bullseye', 'Decisions, not dashboards', 'The four things that need you today, ranked by money at risk.'],
   ['chart_increasing', 'Every account health-scored', 'Adoption, payments, usage trend and tickets in one transparent model.'],
-  ['shield', 'Suggest-only copilot', 'Drafts the email and explains the numbers — never acts on its own.'],
+  ['shield', 'Suggest-only assistant', 'Drafts the email and explains the numbers — never acts on its own.'],
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -39,7 +40,7 @@ function Preview() {
 }
 
 export function Login() {
-  const { session, signIn } = useAuth();
+  const { session, signIn, verifyMfa } = useAuth();
   const navigate = useNavigate();
   const from = useLocation().state?.from ?? '/';
   const [email, setEmail] = useState('');
@@ -50,6 +51,9 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  /* two-step sign-in: the ticket from the password step, and the authenticator code */
+  const [mfa, setMfa] = useState(null);
+  const [code, setCode] = useState('');
 
   if (session) return <Navigate to={from} replace />;
 
@@ -60,11 +64,22 @@ export function Login() {
     e.preventDefault();
     setTried(true);
     setError('');
-    if (emailErr || pwErr || busy) return;
+    if (busy) return;
+    if (mfa) {
+      if (!/^\d{6}$/.test(code)) { setError('Enter the 6-digit code from your authenticator app.'); return; }
+      setBusy(true);
+      const err = await verifyMfa(mfa, code, remember);
+      setBusy(false);
+      if (err) setError(err);
+      else navigate(from, { replace: true });
+      return;
+    }
+    if (emailErr || pwErr) return;
     setBusy(true);
     const err = await signIn(email, password, remember);
     setBusy(false);
-    if (err) setError(err);
+    if (err && typeof err === 'object') { setMfa(err.mfaToken); setTried(false); }
+    else if (err) setError(err);
     else navigate(from, { replace: true });
   };
 
@@ -81,7 +96,7 @@ export function Login() {
         <div className="ab-glow g1" /><div className="ab-glow g2" />
         <div className="ab-top">
           <div className="logo-t">T</div>
-          <div><b>TRINIZE</b><span>OWNER PORTAL 2.0</span></div>
+          <div><b>Trinize</b><span>Owner portal</span></div>
         </div>
         <div className="ab-mid">
           <span className="ab-eyebrow">For platform operators</span>
@@ -92,43 +107,54 @@ export function Login() {
               <li key={t}><span className="ab-ic"><Icon3D name={icon} size={26} /></span><div><b>{t}</b><span>{s}</span></div></li>
             ))}
           </ul>
-          <Preview />
+          {!LIVE && <Preview />}
         </div>
-        <div className="ab-foot">Concept UI · fictional demo data · nothing is stored or sent</div>
+        <div className="ab-foot">{LIVE ? 'Operators only · every action is recorded in the activity log' : 'Concept UI · fictional demo data · nothing is stored or sent'}</div>
       </section>
 
       <section className="auth-main">
         <form className="auth-card" onSubmit={submit} noValidate>
-          <div className="ac-logo"><div className="logo-t">T</div><b>TRINIZE</b></div>
+          <div className="ac-logo"><div className="logo-t">T</div><b>Trinize</b></div>
           <Icon3D name="office_building" size={52} className="ac-hero" />
           <h1>Welcome back</h1>
           <p className="ac-sub">Sign in to the Trinize owner portal</p>
 
-          <div className="demo-box">
+          {!LIVE && <div className="demo-box">
             <Icon3D name="key" size={28} />
             <div>
               <b>Demo account</b>
               <span className="num">{DEMO_LOGIN.email} · {DEMO_LOGIN.password}</span>
             </div>
             <button type="button" className="btn sm soft" onClick={fillDemo}>Fill in</button>
-          </div>
+          </div>}
 
           {error && <div className="form-alert bad" role="alert"><CircleAlert size={16} />{error}</div>}
           {note && <div className="form-alert info"><Info size={16} />{note}</div>}
 
-          <label className="field">
+          {mfa && (
+            <label className="field">
+              <span className="f-l">Authenticator code<button type="button" className="link" onClick={() => { setMfa(null); setCode(''); setError(''); }}>Start again</button></span>
+              <span className="f-in">
+                <KeyRound size={16} />
+                <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" autoFocus />
+              </span>
+              <span className="f-hint">Open your authenticator app and enter the code for Trinize.</span>
+            </label>
+          )}
+
+          {!mfa && <label className="field">
             <span className="f-l">Work email</span>
             <span className={'f-in' + (tried && emailErr ? ' err' : '')}>
               <Mail size={16} />
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@trinize.com" autoComplete="username" autoFocus />
             </span>
             {tried && emailErr && <span className="f-err">{emailErr}</span>}
-          </label>
+          </label>}
 
-          <label className="field">
+          {!mfa && <label className="field">
             <span className="f-l">
               Password
-              <button type="button" className="link" onClick={() => setNote('Password resets are handled by your Trinize administrator in this demo.')}>Forgot password?</button>
+              <button type="button" className="link" onClick={() => setNote(LIVE ? 'Password resets are handled by your Trinize administrator.' : 'Password resets are handled by your Trinize administrator in this demo.')}>Forgot password?</button>
             </span>
             <span className={'f-in' + (tried && pwErr ? ' err' : '')}>
               <Lock size={16} />
@@ -138,7 +164,7 @@ export function Login() {
               </button>
             </span>
             {tried && pwErr && <span className="f-err">{pwErr}</span>}
-          </label>
+          </label>}
 
           <label className="check">
             <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
@@ -146,7 +172,7 @@ export function Login() {
           </label>
 
           <button className="btn auth-submit" type="submit" disabled={busy}>
-            {busy ? <><LoaderCircle size={16} className="spin" /> Signing in…</> : <>Sign in <ArrowRight size={16} /></>}
+            {busy ? <><LoaderCircle size={16} className="spin" /> Signing in…</> : <>{mfa ? 'Verify' : 'Sign in'} <ArrowRight size={16} /></>}
           </button>
 
           <p className="ac-foot">Need access? Ask your Trinize administrator to invite you.</p>

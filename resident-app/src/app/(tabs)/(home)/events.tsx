@@ -1,10 +1,12 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useUI } from '@/components/Overlay';
 import { Btn, Card, EmptyState, Header, IconTile, Meta, Pill, Row, Screen, Sect, Segmented, stagger, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
 import { CalendarForm } from '@/lib/native';
-import { SOCIETY, type CommunityEvent } from '@/store/data';
+import { useFocusJump } from '@/lib/useFocusJump';
+import { SOCIETY, type CommunityEvent, type PastEvent } from '@/store/data';
 import { useStore } from '@/store/store';
 import { C } from '@/theme';
 
@@ -12,7 +14,18 @@ export default function Events() {
   const { state, actions } = useStore();
   const { toast, openSheet } = useUI();
   const { t, tx } = useT();
+  // an event notification opens this list on its event (?focus=E-52)
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
+  const { scrollRef, place } = useFocusJump(focus);
   const [tab, setTab] = useState<'up' | 'past'>('up');
+  // an event moves to Past once it has ended, so nothing stale sits under Upcoming
+  const [now] = useState(() => Date.now());
+  const ended = (e: CommunityEvent) => new Date(e.at).getTime() + e.mins * 60_000 < now;
+  const upcoming = state.events.filter(e => !ended(e)).sort((a, b) => a.at.localeCompare(b.at));
+  const past: PastEvent[] = [
+    ...state.events.filter(ended).reverse().map(e => ({ id: e.id, title: e.title, when: e.when, where: e.where, attended: e.going, icon: e.icon })),
+    ...state.pastEvents,
+  ];
 
   // the system "new event" form — the resident confirms and picks the calendar there
   const addToCalendar = async (e: CommunityEvent) => {
@@ -26,17 +39,20 @@ export default function Events() {
         location: e.where + ', ' + SOCIETY.name,
         notes: e.desc,
       });
-      if (res.action !== 'canceled') toast(t('events.calOpened'), 'calendar');
+      // only iOS reports a real save; Android's form returns "done" for saved and discarded alike,
+      // so there we only say where the event went
+      if (res.action === 'saved') toast(t('events.calOpened'), 'calendar');
+      else if (res.action !== 'canceled' && res.action !== 'deleted') toast(t('events.calHanded'), 'calendar');
     } catch {
       toast(t('events.calUnavailable'), 'calendar');
     }
   };
 
   return (
-    <Screen header={<Header title={t('events.title')} back="/" bell />}>
+    <Screen scrollRef={scrollRef} header={<Header title={t('events.title')} back="/" bell />}>
       <Segmented items={[['up', t('events.up')], ['past', t('events.past')]]} value={tab} onChange={setTab} />
       {tab === 'past' ? (
-        state.pastEvents.length ? state.pastEvents.map((e, i) => (
+        past.length ? past.map((e, i) => (
           <Card key={e.id} delay={stagger(i)}>
             <View style={{ flexDirection: 'row', gap: 11 }}>
               <IconTile name={e.icon} size={42} bg={C.dimBg} fg={C.ink2} />
@@ -50,31 +66,34 @@ export default function Events() {
         )) : <EmptyState icon="calendar-outline" title={t('events.noPast')} />
       ) : (
         <>
-          {state.events.map((e, i) => {
+          {!upcoming.length && <EmptyState icon="calendar-outline" title={t('events.noUp')} />}
+          {upcoming.map((e, i) => {
             const left = e.cap - e.going;
             const full = left <= 0;
             return (
-              <Card key={e.id} delay={stagger(i)}>
-                <View style={{ flexDirection: 'row', gap: 11 }}>
-                  <IconTile name={e.icon} size={42} bg={full ? C.badBg : C.accBg} fg={full ? C.bad : C.acc} />
-                  <View style={{ flex: 1 }}>
-                    <Txt w={700} style={{ fontSize: 13.5 }}>{e.title}</Txt>
-                    <Meta style={{ marginTop: 2 }}>{e.when} · {e.where}</Meta>
-                    <Txt style={{ fontSize: 12, color: C.ink2, marginTop: 4, lineHeight: 17 }}>{e.desc}</Txt>
-                    <Row style={{ marginTop: 8 }}>
-                      <Pill tone={full ? 'bad' : left <= 5 ? 'warn' : 'good'}>{full ? t('events.full') : t('events.left', { left, cap: e.cap })}</Pill>
-                      <Meta>{t('events.going', { n: e.going })}</Meta>
-                      {e.mine && <Pill tone="acc">{t('events.you', { status: tx('rsvp', e.mine) })}</Pill>}
-                    </Row>
-                    <Row style={{ marginTop: 10, gap: 8 }}>
-                      {e.mine
-                        ? <Btn variant="ghost" label={t('events.change')} onPress={() => actions.unrsvp(e.id)} />
-                        : <Btn icon={full ? 'hourglass-outline' : 'checkmark'} label={full ? t('events.waitlist') : t('events.rsvp')} onPress={() => actions.rsvp(e.id)} />}
-                      <Btn variant="ghost" icon="calendar-outline" label={t('events.calendar')} onPress={() => addToCalendar(e)} />
-                    </Row>
+              <View key={e.id} onLayout={place(e.id)}>
+                <Card delay={stagger(i)} style={focus === e.id && s.focused}>
+                  <View style={{ flexDirection: 'row', gap: 11 }}>
+                    <IconTile name={e.icon} size={42} bg={full ? C.badBg : C.accBg} fg={full ? C.bad : C.acc} />
+                    <View style={{ flex: 1 }}>
+                      <Txt w={700} style={{ fontSize: 13.5 }}>{e.title}</Txt>
+                      <Meta style={{ marginTop: 2 }}>{e.when} · {e.where}</Meta>
+                      <Txt style={{ fontSize: 12, color: C.ink2, marginTop: 4, lineHeight: 17 }}>{e.desc}</Txt>
+                      <Row style={{ marginTop: 8 }}>
+                        <Pill tone={full ? 'bad' : left <= 5 ? 'warn' : 'good'}>{full ? t('events.full') : t('events.left', { left, cap: e.cap })}</Pill>
+                        <Meta>{t('events.going', { n: e.going })}</Meta>
+                        {e.mine && <Pill tone="acc">{t('events.you', { status: tx('rsvp', e.mine) })}</Pill>}
+                      </Row>
+                      <Row style={{ marginTop: 10, gap: 8 }}>
+                        {e.mine
+                          ? <Btn variant="ghost" label={t('events.change')} onPress={() => actions.unrsvp(e.id)} />
+                          : <Btn icon={full ? 'hourglass-outline' : 'checkmark'} label={full ? t('events.waitlist') : t('events.rsvp')} onPress={() => actions.rsvp(e.id)} />}
+                        <Btn variant="ghost" icon="calendar-outline" label={t('events.calendar')} onPress={() => addToCalendar(e)} />
+                      </Row>
+                    </View>
                   </View>
-                </View>
-              </Card>
+                </Card>
+              </View>
             );
           })}
 
@@ -93,3 +112,7 @@ export default function Events() {
     </Screen>
   );
 }
+
+const s = StyleSheet.create({
+  focused: { borderColor: C.acc, borderWidth: 1.5 },
+});

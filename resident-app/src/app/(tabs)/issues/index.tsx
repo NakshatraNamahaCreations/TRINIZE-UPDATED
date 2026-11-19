@@ -19,7 +19,7 @@ export default function MyIssues() {
       {mine.map((i, idx) => (
         <Card key={i.id} delay={stagger(idx)} onPress={() => router.push(`/issues/${i.id}`)}>
           <Row>
-            <Txt w={700} style={{ fontSize: 11, color: C.ink3 }}>{i.id}</Txt>
+            <Txt w={700} style={{ fontSize: 12, color: C.ink3 }}>{i.id}</Txt>
             <Pill tone={i.status === 'Resolved' ? 'good' : i.status === 'Submitted' ? 'dim' : 'acc'}>{tx('status', i.status)}</Pill>
             {i.slaState === 'over' && <Pill tone="bad">{t('issues.breached')}</Pill>}
           </Row>

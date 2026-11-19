@@ -21,8 +21,8 @@ export function AnnouncementCard({ a, showAck, delay }: { a: Announcement; showA
           <Txt numberOfLines={2} style={{ fontSize: 12, color: C.ink2, marginTop: 3, lineHeight: 17 }}>{a.body}</Txt>
           <Meta style={{ marginTop: 6 }}>
             {a.by} · {a.when} · {a.aud}
-            {showAck && a.ack && !a.acked && <Txt w={700} style={{ color: C.warn, fontSize: 11 }}>{t('ann.ackRequired')}</Txt>}
-            {showAck && <Txt w={700} style={{ color: C.acc, fontSize: 11 }}>{t('ann.readMore')}</Txt>}
+            {showAck && a.ack && !a.acked && <Txt w={700} style={{ color: C.warn, fontSize: 12 }}>{t('ann.ackRequired')}</Txt>}
+            {showAck && <Txt w={700} style={{ color: C.acc, fontSize: 12 }}>{t('ann.readMore')}</Txt>}
           </Meta>
         </View>
       </View>

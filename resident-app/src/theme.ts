@@ -7,7 +7,7 @@ export const C = {
   line: '#E7E3F2',
   ink: '#171331',
   ink2: '#5E5980',
-  ink3: '#918CAB',
+  ink3: '#6E6890', // was #918CAB — 4.5:1 on white for older eyes and sunlight (UX review, Nov 2026)
   acc: '#7C55F7',
   accBg: '#F1ECFE',
   accBorder: '#D9CEFC',

@@ -1,0 +1,14 @@
+That's the Society Admin console. The seeded demo login is:
+
+Email: sanjana.rao@prestigelakeside.in
+Password: Lakeside@2026
+
+For the owner portal, the seeded operator login is:
+
+Email: ravi.kulkarni@trinize.com
+Password: Trinize@2026
+
+for example resident 9876543210,
+ property manager 9833300003 or
+  guard 9822200007.
+   A number the server doesn't know will not get in.

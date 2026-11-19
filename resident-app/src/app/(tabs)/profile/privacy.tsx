@@ -1,8 +1,14 @@
-import { Alert, StyleSheet, View } from 'react-native';
+import { Platform, Share, StyleSheet, View } from 'react-native';
 import { useUI } from '@/components/Overlay';
 import { NavRow, ToggleRow } from '@/components/Settings';
 import { Card, Header, IconTile, Meta, Screen, Sect, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
+import { LIVE } from '@/lib/api';
+import { confirm } from '@/lib/confirm';
+import { exportLive } from '@/lib/live2';
+import { Clipboard } from '@/lib/native';
+import { useAuth } from '@/store/auth';
+import { ME } from '@/store/data';
 import { useStore } from '@/store/store';
 import { C } from '@/theme';
 
@@ -11,11 +17,39 @@ export default function Privacy() {
   const { toast } = useUI();
   const { state, actions } = useStore();
   const p = state.settings.privacy;
+  const { phone } = useAuth();
 
-  const clear = () => Alert.alert(t('pv.clear.confirmT'), t('pv.clear.confirmB'), [
-    { text: t('common.cancel'), style: 'cancel' },
-    { text: t('pv.clear.ok'), style: 'destructive', onPress: actions.clearChat },
-  ]);
+  // everything this build holds about the resident, as JSON, handed to the system share sheet
+  const exportData = async () => {
+    const mine = {
+      exported: new Date().toISOString(),
+      resident: { name: ME.name, unit: ME.unit, phone: '+91 ' + phone },
+      issues: state.issues.filter(i => i.mine).map(({ internal: _internal, ...i }) => i),
+      posts: state.discussions.filter(d => d.by === ME.name).map(({ thread: _thread, ...d }) => d),
+      replies: state.discussions.flatMap(d => (d.thread ?? []).filter(r => r.by === ME.name).map(r => ({ post: d.id, ...r }))),
+      votes: state.polls.filter(x => x.mine).map(x => ({ poll: x.q, choice: x.mine })),
+      rsvps: state.events.filter(e => e.mine).map(e => ({ event: e.title, when: e.when, status: e.mine })),
+      gratitudeSent: state.gratitudes.filter(g => g.by === ME.name),
+      assistantQuestions: p.aiHistory ? state.chat.log.flatMap(m => (m.who === 'me' ? [m.text] : [])) : [],
+      family: state.family,
+      settings: state.settings,
+      blocked: state.blocked,
+    };
+    try {
+      // connected to the API, the export is what the server holds — the complete record, not this phone's copy
+      const json = JSON.stringify(LIVE ? await exportLive() : mine, null, 2);
+      if (Platform.OS === 'web') {
+        await Clipboard?.setStringAsync(json);
+        toast(t('pv.exportCopied'), 'download');
+      } else {
+        await Share.share({ title: t('pv.exportTitle'), message: json });
+      }
+    } catch {
+      toast(t('pv.exportFail'), 'download');
+    }
+  };
+
+  const clear = () => confirm(t('pv.clear.confirmT'), t('pv.clear.confirmB'), t('pv.clear.ok'), t('common.cancel'), actions.clearChat, { icon: 'trash' });
 
   return (
     <Screen header={<Header title={t('profile.privacy')} back="/profile" />}>
@@ -23,7 +57,7 @@ export default function Privacy() {
         <IconTile name="shield-checkmark" size={40} radius={12} bg="#fff" fg={C.good} />
         <View style={{ flex: 1 }}>
           <Txt w={700} style={{ fontSize: 13, color: C.good }}>{t('pv.banner.t')}</Txt>
-          <Txt style={{ fontSize: 11.5, color: C.ink2, marginTop: 2, lineHeight: 17 }}>{t('pv.banner.b')}</Txt>
+          <Txt style={{ fontSize: 12, color: C.ink2, marginTop: 2, lineHeight: 17 }}>{t('pv.banner.b')}</Txt>
         </View>
       </Card>
 
@@ -40,8 +74,14 @@ export default function Privacy() {
 
       <Sect title={t('pv.data')} />
       <Card delay={180} style={{ paddingVertical: 4 }}>
-        <NavRow icon="download-outline" title={t('pv.download.t')} sub={t('pv.download.s')} onPress={() => toast(t('pv.downloadToast'), 'download')} />
+        <NavRow icon="download-outline" title={t('pv.download.t')} sub={t('pv.download.s')} onPress={exportData} />
         <NavRow icon="trash-outline" title={t('pv.clear.t')} sub={t('pv.clear.s')} onPress={clear} danger last />
+      </Card>
+      <Sect title={t('pv.blocked')} />
+      <Card delay={240} style={{ paddingVertical: 4 }}>
+        {state.blocked.length ? state.blocked.map((name, i) => (
+          <NavRow key={name} icon="eye-off-outline" title={name} sub={t('menu.unblock')} onPress={() => actions.unblock(name)} last={i === state.blocked.length - 1} />
+        )) : <Meta style={{ paddingVertical: 10 }}>{t('pv.blockedNone')}</Meta>}
       </Card>
       <Meta style={{ paddingHorizontal: 18, paddingTop: 6, textAlign: 'center' }}>{t('notif.note')}</Meta>
     </Screen>

@@ -42,7 +42,7 @@ export default function Tour() {
       <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Txt style={{ fontSize: 12, color: C.ink2, flex: 1, lineHeight: 18 }}>{t('tour.intro')}</Txt>
-          <View style={s.count}><Txt w={800} style={{ fontSize: 11, color: C.acc }}>{done} / {TRY_TOTAL}</Txt></View>
+          <View style={s.count}><Txt w={800} style={{ fontSize: 12, color: C.acc }}>{done} / {TRY_TOTAL}</Txt></View>
         </View>
         <View style={s.progress}><View style={[s.progressFill, { width: `${Math.round((done / TRY_TOTAL) * 100)}%` }]} /></View>
       </View>
@@ -53,7 +53,7 @@ export default function Tour() {
             <View style={[s.tick, ok && s.tickOn]}>{ok && <Icon name="checkmark" size={13} color="#fff" />}</View>
             <View style={{ flex: 1 }}>
               <Txt w={700} style={{ fontSize: 13 }}>{t(`tour.${st}.t` as Key)}</Txt>
-              <Txt style={{ fontSize: 11.5, color: C.ink2, marginTop: 2, lineHeight: 16 }}>{t(`tour.${st}.s` as Key)}</Txt>
+              <Txt style={{ fontSize: 12, color: C.ink2, marginTop: 2, lineHeight: 16 }}>{t(`tour.${st}.s` as Key)}</Txt>
             </View>
             <Icon name="chevron-forward" size={18} color={C.ink3} />
           </Pressable>

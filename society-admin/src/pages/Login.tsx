@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { DEMO_ACCOUNT, useAuth } from '../auth/auth-context';
 import { useToast } from '../components/toast-context';
+import { LIVE } from '../lib/api';
 import { SOCIETY } from '../store/data';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,7 +43,7 @@ export function Login() {
     const res = await signIn(email, password, remember);
     setBusy(false);
     if (!res.ok) { setError(res.error); return; }
-    toast('Welcome back, Sanjana', 'Signed in to ' + SOCIETY.name);
+    toast('Welcome back', LIVE ? 'Signed in to your society’s console' : 'Signed in to ' + SOCIETY.name);
     nav(from, { replace: true });
   };
 
@@ -63,7 +64,7 @@ export function Login() {
         <div className="login-copy">
           <div className="eyebrow">Society admin console</div>
           <h1>Run your community from one calm console.</h1>
-          <p>Issues, moderation, announcements, events and the AI assistant for {SOCIETY.name} — in one place, every action audited.</p>
+          <p>Issues, moderation, announcements, events and the AI assistant for {LIVE ? 'your society' : SOCIETY.name} — in one place, every action audited.</p>
           <ul>
             {FEATURES.map(f => (
               <li key={f.t}>
@@ -73,7 +74,7 @@ export function Login() {
             ))}
           </ul>
         </div>
-        <div className="login-foot">Demo environment · all names and records are fictional</div>
+        <div className="login-foot">{LIVE ? 'Staff only · every action is recorded in the audit log' : 'Demo environment · all names and records are fictional'}</div>
       </aside>
 
       <main className="login-main">
@@ -83,7 +84,7 @@ export function Login() {
             <div><b>Trinize</b><span>Society admin</span></div>
           </div>
           <h2>Welcome back</h2>
-          <p className="lede">Sign in to the {SOCIETY.name} admin console.</p>
+          <p className="lede">{LIVE ? 'Sign in to your society’s admin console.' : `Sign in to the ${SOCIETY.name} admin console.`}</p>
 
           {error && <div className="alert" role="alert"><WarningCircle size={16} />{error}</div>}
 
@@ -116,14 +117,19 @@ export function Login() {
             {busy ? <><CircleNotch size={16} className="spin" />Signing in…</> : <>Sign in<ArrowRight size={16} /></>}
           </button>
 
-          <div className="or"><span>or</span></div>
-          <button type="button" className="a-btn ghost lg" onClick={useDemo}><Key size={16} />Use the demo account</button>
+          {/* the one-click demo sign-in belongs to the demo only; connected, people use their own accounts */}
+          {!LIVE && (
+            <>
+              <div className="or"><span>or</span></div>
+              <button type="button" className="a-btn ghost lg" onClick={useDemo}><Key size={16} />Use the demo account</button>
 
-          <div className="demo-creds">
-            <b>Demo credentials</b>
-            <span>{DEMO_ACCOUNT.email}</span>
-            <span>{DEMO_ACCOUNT.password}</span>
-          </div>
+              <div className="demo-creds">
+                <b>Demo credentials</b>
+                <span>{DEMO_ACCOUNT.email}</span>
+                <span>{DEMO_ACCOUNT.password}</span>
+              </div>
+            </>
+          )}
         </form>
       </main>
     </div>

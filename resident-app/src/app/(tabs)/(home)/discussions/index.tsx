@@ -13,7 +13,8 @@ export default function Discussions() {
   const { state } = useStore();
   const { t } = useT();
   const [tab, setTab] = useState<'all' | 'my'>('all');
-  const list = state.discussions.filter(d => (tab === 'all' ? d.state !== 'hidden' : d.by === ME.name));
+  // posts from people this resident blocked never show in the feed
+  const list = state.discussions.filter(d => (tab === 'all' ? d.state !== 'hidden' && !state.blocked.includes(d.by) : d.by === ME.name));
   const compose = () => router.push('/compose');
   // Privacy → "Show my flat number" applies to my own byline everywhere
   const unit = (by: string, u: string) => (by === ME.name && !state.settings.privacy.showFlat ? '' : ' · ' + u);

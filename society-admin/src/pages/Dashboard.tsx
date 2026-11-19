@@ -1,8 +1,13 @@
-import { Alarm, ArrowRight, CalendarCheck, ChartBar, ChartBarHorizontal, CheckCircle, HandWaving, Heart, type Icon as IconType, Megaphone, ShieldWarning, Sparkle, Ticket, TrendUp, WarningDiamond } from '@phosphor-icons/react';
+import { Alarm, ArrowRight, CalendarCheck, ChartBar, ChartBarHorizontal, CheckCircle, ClockCounterClockwise, HandWaving, Heart, type Icon as IconType, Megaphone, ShieldWarning, Sparkle, Ticket, TrendUp, UsersThree, WarningDiamond } from '@phosphor-icons/react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { LIVE } from '../lib/api';
+import { allowed, useAccess } from '../lib/access';
+import { setupLive, type SetupStep } from '../lib/live';
 import { CategoryBars, TrendChart } from '../components/Charts';
-import { Empty, PanelHead } from '../components/ui';
+import { Empty, PanelHead, Pill } from '../components/ui';
 import { greeting } from '../lib/format';
+import { useAuth } from '../auth/auth-context';
 import { ADMIN, isOpen } from '../store/data';
 import { useStore } from '../store/context';
 
@@ -10,6 +15,13 @@ type Kpi = { label: string; value: number; sub: string; to: string; hot?: boolea
 
 export function Dashboard() {
   const { state } = useStore();
+  const { user } = useAuth();
+  /* a new society's first steps; gone once every one of them is done */
+  const { access } = useAccess();
+  const [setup, setSetup] = useState<{ steps: SetupStep[]; done: number; total: number } | null>(null);
+  const stamp = state.users.length + ':' + state.announcements.length + ':' + state.ai.docs.length;
+  useEffect(() => { if (LIVE) setupLive().then(setSetup).catch(() => {}); }, [stamp]);
+  const todo = (setup?.steps ?? []).filter(s => allowed(access, s.to));
   const nav = useNavigate();
   const open = state.issues.filter(isOpen);
   const resolved = state.issues.length - open.length;
@@ -30,10 +42,15 @@ export function Dashboard() {
     { label: 'Gratitudes', value: state.gratitudes, sub: 'private notes · each one audited', to: '/audit', icon: Heart, bg: '#FCE7F3', fg: '#BE185D' },
   ];
 
-  const yoga = state.events.find(e => e.id === 'E-52');
-  const cctv = state.polls.find(p => p.id === 'P-20');
-  const water = state.announcements.find(a => a.id === 'AN-118');
-  const lift = slaOver.find(i => i.id === 'ISS-1039');
+  // the facts the plain-words summary is written from: the worst breach, the fullest event, the busiest open poll, the notice that reached fewest
+  const breach = slaOver.filter(isOpen)[0];
+  const fullest = [...state.events].sort((a, b) => b.going / b.cap - a.going / a.cap)[0];
+  const busiest = [...activePolls].map(p => ({ p, total: p.opts.reduce((x, o) => x + o.v, 0) })).sort((a, b) => b.total - a.total)[0];
+  const lead = busiest && busiest.total > 0 ? [...busiest.p.opts].sort((a, b) => b.v - a.v)[0] : undefined;
+  const quiet = state.announcements.filter(a => a.ack && a.read < 50)[0];
+  const owners = state.users.filter(u => u.role === 'Owner').length;
+  const flats = new Set(state.users.map(u => u.unit)).size;
+  const standing = state.users.filter(u => u.status !== 'Active').length;
 
   // SLA breaches first, then unacknowledged reports, then the moderation queue, then high-priority work
   const attention: { key: string; icon: IconType; tone: string; title: string; sub: string; to: string }[] = [
@@ -45,17 +62,35 @@ export function Dashboard() {
 
   return (
     <>
-      <div className="greet">{greeting()}, {ADMIN.first} <HandWaving size={14} /></div>
+      <div className="greet">{greeting()}, {user?.name.split(' ')[0] ?? ADMIN.first} <HandWaving size={14} /></div>
       <h1>Community dashboard</h1>
       <div className="sub">Everything below is computed live from the same records the resident app writes to — click any number to open its matching list. Counts always reconcile.</div>
+
+      {setup && setup.done < setup.total && todo.length > 0 && (
+        <div className="panel setup">
+          <div className="setup-h">
+            <div><b>Finish setting up your society</b><span>{setup.done} of {setup.total} done — residents get the most from the app once these are in place.</span></div>
+            <div className="prog" style={{ width: 160 }}><i style={{ width: (setup.done / setup.total) * 100 + '%', background: 'var(--good)' }} /></div>
+          </div>
+          <div className="setup-steps">
+            {todo.map((s, i) => (
+              <button key={s.key} className={'setup-step' + (s.done ? ' done' : '')} onClick={() => nav(s.to)}>
+                <span className="n">{s.done ? <CheckCircle size={18} weight="fill" /> : i + 1}</span>
+                <span className="t"><b>{s.title}</b><span>{s.done ? `Done · ${s.count} so far` : s.body}</span></span>
+                <ArrowRight size={15} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="kpis">
         {kpis.map(k => (
           <button key={k.label} className="kpi" onClick={() => nav(k.to)}>
             <div className="k-ic" style={{ background: k.bg, color: k.fg }}><k.icon size={22} /></div>
-            <div className="k-l">{k.label}<ArrowRight size={12} color={k.hot ? 'var(--bad)' : 'var(--ink3)'} /></div>
+            <div className="k-l">{k.label}</div>
             <div className="k-v num" style={k.hot ? { color: 'var(--bad)' } : undefined}>{k.value}</div>
-            <div className="k-s">{k.sub}</div>
+            <div className="k-s"><span>{k.sub}</span><ArrowRight size={13} color={k.hot ? 'var(--bad)' : 'var(--ink3)'} /></div>
           </button>
         ))}
       </div>
@@ -94,14 +129,68 @@ export function Dashboard() {
         <PanelHead icon={Sparkle} title="This week, in plain words" sub="AI generated · from your own community records — verify anything operational against the ticket before acting" />
         <p style={{ color: 'var(--ink2)', fontSize: 13, maxWidth: '80ch' }}>
           You have <b style={{ color: 'var(--ink)' }} className="num">{open.length} open issue{open.length === 1 ? '' : 's'}</b>
-          {lift && <>, and <b style={{ color: 'var(--bad)' }}>ISS-1039 (lift 2, Tower 1) has breached its response SLA</b> — the vendor is waiting on a part; chase OTIS today</>}.{' '}
-          {openMod.length > 0 && <>The moderation queue has <b style={{ color: 'var(--ink)' }} className="num">{openMod.length}</b> item{openMod.length > 1 ? 's' : ''} — oldest is {openMod[openMod.length - 1].when}. </>}
-          {yoga
-            ? <>Yoga by the Lake is {yoga.going >= yoga.cap ? `full (${yoga.going} of ${yoga.cap} — waitlist open)` : `nearly full (${yoga.going} of ${yoga.cap})`}, and the</>
-            : 'The'}
-          {cctv && <> CCTV poll is trending <b style={{ color: 'var(--ink)' }}>{Math.round((cctv.opts[0].v / (cctv.opts[0].v + cctv.opts[1].v)) * 100)}% in favour</b>.</>}
-          {water && <> Wednesday’s water shutdown notice has reached {water.read}% of Towers 4–5 — consider a reminder ping tomorrow.</>}
+          {breach && <>, and <b style={{ color: 'var(--bad)' }}>{breach.id} ({breach.title}) has breached its SLA</b>{breach.vendor !== '—' && <> — chase {breach.vendor} today</>}</>}.{' '}
+          {openMod.length > 0 && <>The moderation queue has <b style={{ color: 'var(--ink)' }} className="num">{openMod.length}</b> item{openMod.length > 1 ? 's' : ''} — the oldest arrived {openMod[openMod.length - 1].when.toLowerCase()}. </>}
+          {fullest && <>{fullest.title} is {fullest.going >= fullest.cap ? `full (${fullest.going} of ${fullest.cap} — further RSVPs join the waitlist)` : `the fullest event so far (${fullest.going} of ${fullest.cap})`}. </>}
+          {lead && <>On “{busiest.p.q}”, <b style={{ color: 'var(--ink)' }}>{lead.t}</b> leads with {Math.round((lead.v / busiest.total) * 100)}% of {busiest.total} votes. </>}
+          {quiet && <>“{quiet.title}” has reached only {quiet.read}% of {quiet.aud.toLowerCase()} — consider a reminder.</>}
         </p>
+      </div>
+
+      <div className="grid3">
+        <div className="panel">
+          <PanelHead icon={CalendarCheck} title="Upcoming events" sub="RSVPs against capacity" tone="good" right={<button className="a-btn ghost xs" onClick={() => nav('/events-polls')}>All</button>} />
+          {state.events.length ? (
+            <ul className="mini">
+              {state.events.slice(0, 4).map(e => {
+                const pct = Math.min(100, Math.round((e.going / e.cap) * 100));
+                return (
+                  <li key={e.id}>
+                    <span className="m-t"><b>{e.title}</b><span>{e.when} · {e.where}</span>
+                      <span className="prog" style={{ display: 'block', height: 5, marginTop: 5 }}><i style={{ width: pct + '%', background: pct >= 100 ? 'var(--bad)' : pct >= 85 ? 'var(--warn)' : 'var(--acc)' }} /></span>
+                    </span>
+                    <b className="num" style={{ color: 'var(--ink)' }}>{e.going}/{e.cap}</b>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : <div className="d-none">No upcoming events.</div>}
+        </div>
+        <div className="panel">
+          <PanelHead icon={Megaphone} title="Latest announcements" sub="Newest first" right={<button className="a-btn ghost xs" onClick={() => nav('/announcements')}>All</button>} />
+          {state.announcements.length ? (
+            <ul className="mini">
+              {state.announcements.slice(0, 4).map(a => (
+                <li key={a.id}>
+                  <span className="m-t"><b>{a.title}</b><span>{a.aud} · {a.when}</span></span>
+                  {a.pri === 'High' ? <Pill tone="bad">High</Pill> : <Pill tone="dim">Normal</Pill>}
+                </li>
+              ))}
+            </ul>
+          ) : <div className="d-none">Nothing published yet.</div>}
+        </div>
+        <div className="panel">
+          <PanelHead icon={ClockCounterClockwise} title="Recent activity" sub="From the audit log" tone="dim" right={<button className="a-btn ghost xs" onClick={() => nav('/audit')}>All</button>} />
+          {state.audit.length ? (
+            <ul className="mini">
+              {state.audit.slice(0, 5).map((a, i) => (
+                <li key={i}><span className="m-t"><b>{a.who}</b><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.what}</span></span><span style={{ fontSize: 11, color: 'var(--ink3)', whiteSpace: 'nowrap' }}>{a.when}</span></li>
+              ))}
+            </ul>
+          ) : <div className="d-none">Nothing has been logged yet.</div>}
+        </div>
+      </div>
+
+      <div className="panel">
+        <PanelHead icon={UsersThree} title="Community at a glance" sub="Residents on the app — open Residents or Flats & units for every flat and household" />
+        <div className="snap">
+          <button onClick={() => nav('/residents')}><b className="num">{state.users.length}</b><span>Residents</span></button>
+          <button onClick={() => nav('/flats')}><b className="num">{flats}</b><span>Flats with residents</span></button>
+          <button onClick={() => nav('/residents')}><b className="num">{owners}</b><span>Owners</span></button>
+          <button onClick={() => nav('/residents')}><b className="num">{state.users.length - owners}</b><span>Tenants & family</span></button>
+          <button onClick={() => nav('/residents')}><b className="num" style={standing ? { color: 'var(--warn)' } : undefined}>{standing}</b><span>Warned or restricted</span></button>
+          <button onClick={() => nav('/issues?filter=Resolved')}><b className="num" style={{ color: 'var(--good)' }}>{state.issues.length ? Math.round((resolved / state.issues.length) * 100) : 0}%</b><span>Issues resolved</span></button>
+        </div>
       </div>
       <div className="flow-note"><b>The loop:</b> issues residents report through the Community Assistant land in <b>Issues</b> here — work them through to resolved, and the resident’s tracker updates with every step.</div>
     </>

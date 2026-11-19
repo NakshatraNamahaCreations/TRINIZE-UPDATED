@@ -28,7 +28,7 @@ function PaletteBox() {
     ...ASSOC.map(a => ({ g: 'Associations', ic: a.ini, t: a.n, s: a.city + ' · ' + a.plan, run: p => p.go('a360', a.id) })),
     ...INVOICES.map(i => ({ g: 'Invoices', ic: Receipt, t: i.id, s: findAssoc(i.a).n + ' · ' + fmtI(i.amt), run: p => p.go('collections') })),
     ...issues.map(i => ({ g: 'Issues', ic: Ticket, t: i.id + ' · ' + i.t, s: findAssoc(i.a).n, run: p => p.openModal(<IssueModal id={i.id} />) })),
-    { g: 'Ask', ic: Sparkles, t: 'Ask the copilot what needs me today', s: 'AI', run: p => p.copAsk('What needs me today?') },
+    { g: 'Ask', ic: Sparkles, t: 'Ask the assistant what needs me today', s: 'AI', run: p => p.copAsk('What needs me today?') },
   ], [issues]);
 
   const list = useMemo(() => {

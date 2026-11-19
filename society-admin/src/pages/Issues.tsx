@@ -1,4 +1,5 @@
 import { Alarm, CheckCircle, DownloadSimple, MagnifyingGlassMinus, Ticket, Wrench, X } from '@phosphor-icons/react';
+import { TableCard } from '../components/TableCard';
 import { useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import { IssueDrawer } from '../components/IssueDrawer';
@@ -64,13 +65,13 @@ export function Issues() {
         </div>
       </div>
 
-      <div className="a-tbl-wrap">
+      <TableCard rows={list} noun="issue" filters={[{ key: 'pri', label: 'Priority', get: i => i.pri }, { key: 'status', label: 'Status', get: i => i.status }, { key: 'cat', label: 'Category', get: i => i.cat }, { key: 'vendor', label: 'Vendor', get: i => i.vendor }]}>{(page, sl) => (<div className="a-tbl-wrap">
         <table className="a-tbl">
           <tbody>
-            <tr><th>Issue</th><th>Raised by</th><th>Priority</th><th>Vendor</th><th>SLA</th><th>Status</th></tr>
-            {list.map(i => (
+            <tr><th className="sl">Sl. no.</th><th>Issue</th><th>Raised by</th><th>Priority</th><th>Vendor</th><th>SLA</th><th>Status</th></tr>
+            {page.map((i, rowNo) => (
               <tr key={i.id} className="rowbtn" tabIndex={0} onClick={() => setParam('open', i.id)}
-                onKeyDown={e => { if (e.key === 'Enter') setParam('open', i.id); }}>
+                onKeyDown={e => { if (e.key === 'Enter') setParam('open', i.id); }}><td className="sl num">{sl(rowNo)}</td>
                 <td>
                   <span className="cell-id num">{i.id}</span> · <span className="cell-t">{i.title}</span>
                   <div className="cell-m">{i.cat} · {i.loc} · {i.when}</div>
@@ -87,7 +88,7 @@ export function Issues() {
           </tbody>
         </table>
         {!list.length && <Empty icon={MagnifyingGlassMinus} title="No issues match" body={q ? `Nothing matches “${q}” in ${f.toLowerCase()} issues.` : 'Nothing matches this filter.'} />}
-      </div>
+      </div>)}</TableCard>
       <div className="flow-note">Issues residents report through the AI assistant arrive here with “Reported via chatbot” in their timeline. Every status change notifies the resident and writes an audit entry.</div>
       {drawerIssue && <IssueDrawer key={drawerIssue.id} issue={drawerIssue} onClose={close} />}
     </>

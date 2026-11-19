@@ -23,7 +23,7 @@ export default function Guidelines() {
         <IconTile name="shield-checkmark" size={46} radius={14} bg="rgba(255,255,255,.2)" fg="#fff" />
         <View style={{ flex: 1 }}>
           <Txt w={800} style={{ fontSize: 15, color: '#fff' }}>{t('gl.hero.t')}</Txt>
-          <Txt style={{ fontSize: 11.5, color: 'rgba(255,255,255,.88)', marginTop: 3, lineHeight: 17 }}>{t('gl.hero.b')}</Txt>
+          <Txt style={{ fontSize: 12, color: 'rgba(255,255,255,.88)', marginTop: 3, lineHeight: 17 }}>{t('gl.hero.b')}</Txt>
         </View>
       </Card>
 
@@ -41,7 +41,7 @@ export default function Guidelines() {
       <Card delay={300}>
         {STEPS.map((k, i) => (
           <View key={k} style={[s.step, i === STEPS.length - 1 && { paddingBottom: 0 }]}>
-            <View style={s.num}><Txt w={800} style={{ fontSize: 11, color: C.acc }}>{i + 1}</Txt></View>
+            <View style={s.num}><Txt w={800} style={{ fontSize: 12, color: C.acc }}>{i + 1}</Txt></View>
             <Txt style={{ fontSize: 12.5, flex: 1, lineHeight: 18 }}>{t(k)}</Txt>
           </View>
         ))}
