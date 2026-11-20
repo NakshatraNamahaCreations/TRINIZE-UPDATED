@@ -10,7 +10,12 @@ const Env = z.object({
   CORS_ORIGINS: z.string().default(''),
   SMS_PROVIDER: z.enum(['console', 'msg91', 'memory']).default('console'),
   /** WhatsApp / SMS / email leaving the app. console = written to the server log (no provider connected yet) */
-  MESSAGING: z.enum(['console', 'memory', 'off']).default('console'),
+  MESSAGING: z.enum(['console', 'memory', 'off', 'emailjs']).default('console'),
+  /** MESSAGING=emailjs: email goes out through EmailJS (dashboard.emailjs.com); WhatsApp and SMS are still only logged */
+  EMAILJS_SERVICE_ID: z.string().default(''),
+  EMAILJS_TEMPLATE_ID: z.string().default(''),
+  EMAILJS_PUBLIC_KEY: z.string().default(''),
+  EMAILJS_PRIVATE_KEY: z.string().default(''),
   /** paying dues in the app. off = no gateway connected; mock = a stand-in gateway for development and tests */
   PAYMENTS: z.enum(['off', 'mock']).default('off'),
   MSG91_AUTH_KEY: z.string().default(''),
@@ -33,6 +38,8 @@ export type Config = z.infer<typeof Env> & { fixedOtp: string | null };
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const c = Env.parse(env);
   if (c.NODE_ENV === 'production' && c.SMS_PROVIDER !== 'msg91') throw new Error('production must send real SMS (SMS_PROVIDER=msg91)');
+  if (c.MESSAGING === 'emailjs' && !(c.EMAILJS_SERVICE_ID && c.EMAILJS_TEMPLATE_ID && c.EMAILJS_PUBLIC_KEY && c.EMAILJS_PRIVATE_KEY))
+    throw new Error('MESSAGING=emailjs needs EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PUBLIC_KEY and EMAILJS_PRIVATE_KEY');
   if (c.NODE_ENV === 'production' && c.PAYMENTS === 'mock') throw new Error('the stand-in payment gateway (PAYMENTS=mock) must never run in production');
   // a fixed code is a staging convenience — never honoured in production
   return { ...c, fixedOtp: c.NODE_ENV === 'production' || !c.FIXED_OTP ? null : c.FIXED_OTP };

@@ -245,7 +245,7 @@ export const opsRoutes = ({ config, db, messenger }: Deps): FastifyPluginAsync =
     return reply.status(201).send({ ...i!, state: invoiceState(i!) });
   });
 
-  /** a payment reminder — recorded here; the email itself goes out once a mail provider is connected */
+  /** a payment reminder — always recorded; the email goes out when MESSAGING=emailjs (otherwise it is only logged) */
   app.post('/invoices/:id/chase', async req => {
     const op = await operator(req);
     const { id } = parse(Id, req.params);

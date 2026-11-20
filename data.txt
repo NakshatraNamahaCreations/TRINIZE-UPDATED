@@ -12,3 +12,7 @@ for example resident 9876543210,
  property manager 9833300003 or
   guard 9822200007.
    A number the server doesn't know will not get in.
+
+   serviceid =service_6ottnrl
+   public key=t-by95J6QcK9eUicw
+   Private Key= BMSPCqhUIisoNFXxYR3R0

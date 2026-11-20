@@ -1,5 +1,11 @@
 # Trinize Resident — changelog
 
+## 1.3.0 (build 4) — 19 Nov 2026
+
+### Changed
+- **Connected to the hosted Trinize server** (`https://trinizeapi.nakshatranamahacreations.in`) instead of a PC on
+  the local network, so the app works on any internet connection. Data now lives on the server, not the phone.
+
 ## 1.2.0 (build 3) — 16 Nov 2026
 
 The remaining recommendations from the UX review that don't need the backend.
