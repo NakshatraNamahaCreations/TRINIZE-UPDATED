@@ -5,7 +5,6 @@ import { useUI } from '@/components/Overlay';
 import { Btn, Icon, IconTile, Meta, Pill, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
 import { ApiError, LIVE } from '@/lib/api';
-import { dues, rupees } from '@/lib/dues';
 import { decide, ICON, myVisits, titleOf, type Decision, type MyVisits, type Visit } from '@/lib/gate';
 import { C } from '@/theme';
 
@@ -20,11 +19,8 @@ export function GateHome() {
   const { toast } = useUI();
   const [mine, setMine] = useState<MyVisits | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [owed, setOwed] = useState<number | null>(null);
 
   const load = useCallback(() => { myVisits().then(setMine).catch(() => {}); }, []);
-  // what the flat owes changes rarely: read once each time Home comes back into view
-  useEffect(() => { if (focused) dues().then(d => setOwed(d.due)).catch(() => {}); }, [focused]);
   // no push service is connected yet, so while Home is showing it asks the gate every few seconds
   useEffect(() => {
     if (!focused) return;
@@ -82,14 +78,6 @@ export function GateHome() {
           <Icon name="chevron-forward" size={18} color={C.ink3} />
         </Pressable>
       )}
-      <Pressable onPress={() => router.push('/dues')} accessibilityRole="button" accessibilityLabel={t('dues.title')} style={({ pressed }) => [s.row, pressed && { borderColor: C.acc }]}>
-        <IconTile name="wallet-outline" size={36} bg={owed ? C.warnBg : C.goodBg} fg={owed ? C.warn : C.good} />
-        <View style={{ flex: 1 }}>
-          <Txt w={700} style={{ fontSize: 13.5 }}>{t('dues.title')}</Txt>
-          <Meta numberOfLines={1}>{owed === null ? ' ' : owed ? t('dues.home.due', { amount: rupees(owed) }) : t('dues.home.clear')}</Meta>
-        </View>
-        <Icon name="chevron-forward" size={18} color={C.ink3} />
-      </Pressable>
     </View>
   );
 }

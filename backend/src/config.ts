@@ -31,6 +31,16 @@ const Env = z.object({
   AI_MODEL_FAST: z.string().default('gpt-5.4-nano'),
   /** reasoning effort for models that have it (gpt-5 family and later): none | minimal | low | medium | high. Empty = don't send it. */
   AI_REASONING: z.string().default('low'),
+  /** each person's AI allowance (lib/quota.ts): per minute, and per India-time day. 0 = no limit. */
+  AI_CHAT_PER_MINUTE: z.coerce.number().int().min(0).default(6),
+  AI_CHAT_PER_DAY: z.coerce.number().int().min(0).default(60),
+  AI_REWRITE_PER_MINUTE: z.coerce.number().int().min(0).default(6),
+  AI_REWRITE_PER_DAY: z.coerce.number().int().min(0).default(40),
+  /** the society console's assistant: ask, draft a message, triage */
+  AI_STAFF_PER_MINUTE: z.coerce.number().int().min(0).default(15),
+  AI_STAFF_PER_DAY: z.coerce.number().int().min(0).default(300),
+  /** USD per million tokens, by model, for the AI cost report (lib/usage.ts) — JSON; empty = tokens only, no cost */
+  AI_PRICES: z.string().default(''),
 });
 
 export type Config = z.infer<typeof Env> & { fixedOtp: string | null };

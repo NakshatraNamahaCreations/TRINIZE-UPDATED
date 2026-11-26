@@ -8,6 +8,8 @@ export type Society = {
   id: string; name: string; short: string; city: string; open: number; fresh: number; emergencies: number; overdue: number;
   /** estimates waiting for a yes, requests resolved in the last 7 days, and the size of the place */
   approvals: number; resolvedWeek: number; homes: number; residents: number;
+  /** residents' unread messages, and requests for the on-site visit waiting for an answer */
+  unread?: number; visitRequests?: number;
 };
 /** a request that needs the manager first, from any of their societies */
 export type Attention = { aid: string; society: string; ref: string; title: string; category: string; priority: 'Low' | 'Medium' | 'High' | 'Emergency'; status: Status; slaDueAt: string; overdue: boolean };
@@ -60,3 +62,60 @@ export function when(iso: string | null) {
   return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}, ${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
 }
 export const rupees = (n: number) => '₹' + n.toLocaleString('en-IN');
+
+/* ---------- the weekly on-site visit ---------- */
+export type SiteKind = 'Inspection' | 'Meeting' | 'Follow-up' | 'Request';
+export type SiteItem = {
+  id: string; date: string | null; time: string | null; title: string; location: string; kind: SiteKind; status: 'Requested' | 'Scheduled' | 'Done' | 'Declined';
+  extra: boolean; note: string; reply: string; ref: string | null; issueStatus: Status | null; resident: { name: string; unit: string | null } | null; createdAt: string;
+};
+export type SiteDay = { id: string | null; date: string; start: string; end: string; status: 'Planned' | 'Done' | 'Cancelled'; note: string; startsAt: string; items: SiteItem[] };
+export type SitePlan = { weekday: number; start: string; end: string };
+export type SiteBoard = { plan: SitePlan | null; today: string; days: SiteDay[]; requests: SiteItem[] };
+
+const SV = (aid: string) => `${A(aid)}/site-visits`;
+export const siteBoard = (aid: string) => api<SiteBoard>('GET', `${SV(aid)}?days=21`);
+export const savePlan = (aid: string, p: SitePlan) => api<SitePlan>('PUT', `${SV(aid)}/plan`, p);
+export const setDay = (aid: string, date: string, o: { status?: 'Planned' | 'Done' | 'Cancelled'; note?: string; start?: string; end?: string }) => api('PUT', `${SV(aid)}/days/${date}`, o);
+export const addSiteItem = (aid: string, o: { date: string; time?: string; title: string; location?: string; kind: Exclude<SiteKind, 'Request'> }) => api<SiteItem>('POST', `${SV(aid)}/items`, o);
+export const updateSiteItem = (aid: string, id: string, o: { status?: 'Scheduled' | 'Done' | 'Declined'; date?: string; time?: string | null; reply?: string }) => api<SiteItem>('PUT', `${SV(aid)}/items/${id}`, o);
+export const removeSiteItem = (aid: string, id: string) => api('DELETE', `${SV(aid)}/items/${id}`);
+
+/* ---------- residents' messages to the office ---------- */
+export type Convo = { id: string; subject: string; topic: string; status: 'Open' | 'Closed'; lastMessageAt: string; preview: string; lastFrom: 'resident' | 'staff' | null; unread: number; resident: string; unit: string | null };
+export type ConvoMsg = { id: string; from: 'resident' | 'staff'; by: string; text: string; attachmentUrl: string | null; at: string; readAt: string | null };
+export const inbox = (aid: string) => api<Convo[]>('GET', `${A(aid)}/conversations`);
+export const convo = (aid: string, id: string) => api<Convo & { messages: ConvoMsg[] }>('GET', `${A(aid)}/conversations/${id}`);
+export const replyConvo = (aid: string, id: string, text: string) => api<Convo & { messages: ConvoMsg[] }>('POST', `${A(aid)}/conversations/${id}/messages`, { text });
+export const setConvoStatus = (aid: string, id: string, status: 'Open' | 'Closed') => api<Convo & { messages: ConvoMsg[] }>('POST', `${A(aid)}/conversations/${id}/status`, { status });
+
+/* ---------- the society dashboard ---------- */
+export type OpsStats = {
+  totals: { all: number; week: number; prevWeek: number };
+  timeline: { date: string; created: number; resolved: number }[];
+  categories: { category: string; n: number }[];
+  resolution: { hours: number | null; prevHours: number | null; resolved: number };
+  satisfaction: { avg: number | null; count: number; dist: { star: number; n: number }[] };
+  buckets: { open: number; inProgress: number; pendingVendor: number; resolved: number };
+  vendors: { id: string; name: string; category: string; open: number; inProgress: number; completed: number }[];
+};
+export const opsStats = (aid: string) => api<OpsStats>('GET', `${A(aid)}/stats/operations`);
+
+/** the staff assistant: a question answered from the society's records, with the rows it used */
+export type AiCard = { key: string; title: string; headline: string; columns: string[]; rows: string[][] };
+export const askAssistant = (aid: string, text: string) => api<{ text: string; cards: AiCard[]; refused?: boolean }>('POST', `${A(aid)}/assistant/ask`, { text });
+export const draftNotice = (aid: string, details: string) => api<{ title: string; body: string }>('POST', `${A(aid)}/assistant/draft`, { kind: 'Maintenance notice', details });
+
+export const addVendor = (aid: string, v: { name: string; category: string; phone: string }) => api<Vendor>('POST', `${A(aid)}/vendor-list`, v);
+
+/** my own to-do notes for this society */
+export type Note = { id: string; text: string; done: boolean; createdAt: string };
+export const notes = (aid: string) => api<Note[]>('GET', `${A(aid)}/my-notes`);
+export const addMyNote = (aid: string, text: string) => api<Note>('POST', `${A(aid)}/my-notes`, { text });
+export const setNote = (aid: string, id: string, done: boolean) => api<Note>('PUT', `${A(aid)}/my-notes/${id}`, { done });
+export const removeNote = (aid: string, id: string) => api('DELETE', `${A(aid)}/my-notes/${id}`);
+
+/** a message to every resident, on the channels chosen (the app's notice board, its alert, email), with how it went */
+export type BroadcastResult = { ref: string; stats: { recipients: number; reached: number; logged: number; skipped: number; failed: number } };
+export const broadcast = (aid: string, m: { title: string; body: string; channels: ('portal' | 'push' | 'email')[]; important: boolean }) =>
+  api<BroadcastResult>('POST', `${A(aid)}/comms/messages`, { type: 'Notice', title: m.title, body: m.body, channels: m.channels, priority: m.important ? 'Important' : 'Normal', audience: { kind: 'all' }, action: 'send' });

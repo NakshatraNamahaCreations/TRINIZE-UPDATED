@@ -197,6 +197,20 @@ export const setupLive = () => api<{ steps: SetupStep[]; done: number; total: nu
 
 /** the timings and rules residents ask about most — the same list Trinize can fill in while onboarding */
 export type Fact = { key: string; section: string; label: string; hint: string; value: string };
+
+/* ---------- community health: the Community page ---------- */
+export type CommunityInsights = {
+  members: { total: number; active: number; prev: number };
+  posts: { today: number; yesterday: number };
+  /** % of posts, replies and gratitude notes in the last 30 days that passed the safety check; null when nothing was written */
+  positive: { now: number | null; prev: number | null; written: number };
+  held: { now: number; prev: number };
+  trend: { month: string; total: number; positive: number | null }[];
+  week: { day: string; reported: number; resolved: number }[];
+  alerts: { id: string; ref: string; kind: string; category: string; severity: 'Low' | 'Medium' | 'High'; state: 'open' | 'done'; createdAt: string; by: string }[];
+  givers: { id: string | null; name: string; n: number }[];
+};
+export const communityInsightsLive = () => api<CommunityInsights>('GET', `${A()}/community-insights`);
 export const factsLive = () => api<Fact[]>('GET', `${A()}/facts`);
 export const saveFactsLive = (facts: Record<string, string>) => api<Fact[]>('PUT', `${A()}/facts`, facts);
 

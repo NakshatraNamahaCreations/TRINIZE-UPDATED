@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@/lib/refresh';
 import { useCallback, useState } from 'react';
 import { KeyboardAvoidingView, View } from 'react-native';
@@ -16,8 +16,10 @@ export default function Messages() {
   const { t, tx } = useT();
   const { toast } = useUI();
   const [list, setList] = useState<Conversation[] | null>(null);
-  const [writing, setWriting] = useState(false);
-  const [subject, setSubject] = useState('');
+  // Home's "Chat now" with the property manager opens a new message with the subject filled in
+  const { compose, subject: given } = useLocalSearchParams<{ compose?: string; subject?: string }>();
+  const [writing, setWriting] = useState(compose === '1');
+  const [subject, setSubject] = useState(compose === '1' ? given ?? '' : '');
   const [topic, setTopic] = useState<Topic>('General');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);

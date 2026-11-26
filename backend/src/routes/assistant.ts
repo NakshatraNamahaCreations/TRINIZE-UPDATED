@@ -3,6 +3,7 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../app.js';
 import { aiSettings, AUTO_HOLD, announcements, bills, chatMessages, contacts, documents, events, issues, knowledgeDocs, payments, polls, units, userSettings, visits, type StaffRole } from '../db/schema.js';
+import { answerKey, shareable, storeAnswer, storedAnswer } from '../lib/answers.js';
 import { audit } from '../lib/audit.js';
 import { factDocs, FACTS, FACTS_TITLE, factValue, type FactKey } from '../lib/facts.js';
 import { extractAnswer, isEmergency, relevant, ruleRewrite, understand } from '../lib/assistant.js';
@@ -16,9 +17,13 @@ const TONES = ['Polite', 'Friendly', 'Funny', 'Short & Clear'] as const;
 const NOT_FOUND = 'I couldn’t find that in the approved community information, so I won’t guess. You can rephrase, or ask the society office.';
 const CHIPS = ['Report an issue', 'When is the water shutdown?', 'What are the pool timings?'];
 /** `link` opens the screen that holds the answer; `offer` lets the resident pass an unanswered question to the office in one tap */
-type Reply = { text: string; source: string | null; chips?: string[]; calls?: [string, string][]; link?: { label: string; href: string }; offer?: 'ask_office' };
+type Reply = {
+  text: string; source: string | null; chips?: string[]; calls?: [string, string][]; link?: { label: string; href: string }; offer?: 'ask_office';
+  /** the message was not answered because it read as rude; the app hands it back to be rephrased */
+  flagged?: { level: 'warn' | 'block'; words: string[] };
+};
 
-export const assistantRoutes = ({ config, db, ai }: Deps): FastifyPluginAsync => async app => {
+export const assistantRoutes = ({ config, db, ai, quota }: Deps): FastifyPluginAsync => async app => {
   const me = async (req: FastifyRequest) => residentOf(db, await userIdFrom(req, config.JWT_SECRET));
   const settings = async (aid: string) => {
     const [s] = await db.select().from(aiSettings).where(eq(aiSettings.associationId, aid));
@@ -115,6 +120,7 @@ export const assistantRoutes = ({ config, db, ai }: Deps): FastifyPluginAsync =>
   app.post('/assistant/chat', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async req => {
     const r = await me(req);
     const { text } = parse(z.object({ text: z.string().trim().min(1).max(2000) }), req.body);
+    quota.take('chat', r.userId); // each resident's own allowance: a few a minute, a daily cap
     const cfg = await settings(r.associationId);
     const remember = await keepsHistory(r.userId);
     const done = async (reply: Reply) => {
@@ -127,9 +133,13 @@ export const assistantRoutes = ({ config, db, ai }: Deps): FastifyPluginAsync =>
       return reply;
     };
 
-    const safety = checkSafety(text, await thresholdOf(db, r.associationId));
+    // word lists first (instant, free); if they pass and AI is connected, a second opinion for rude sentences no list can catch
+    const rules = checkSafety(text, await thresholdOf(db, r.associationId));
+    const safety = rules.level !== 'safe' || !ai.enabled ? rules : ((await ai.moderate(text)) ?? rules);
     if (safety.level !== 'safe') {
-      return done({ text: `I noticed ${safety.words.slice(0, 3).map(w => '“' + w + '”').join(', ')} — that may land badly with your neighbours. Let’s keep our community respectful 💜`, source: null, chips: ['Start over'] });
+      // not answered and not kept: the app takes the message back and offers to help rephrase it
+      const named = safety.words.length ? `I noticed ${safety.words.slice(0, 3).map(w => '“' + w + '”').join(', ')} — that` : 'That';
+      return { text: `${named} may land badly with your neighbours. Let’s keep our community respectful 💜`, source: null, chips: ['Start over'], flagged: { level: safety.level, words: safety.words } } satisfies Reply;
     }
 
     const understood = understand(text);
@@ -157,6 +167,21 @@ export const assistantRoutes = ({ config, db, ai }: Deps): FastifyPluginAsync =>
         : [];
       // a small library goes in whole; a large one is narrowed to the related documents
       const candidates = library.length <= 12 ? library : relevant(text, library, 8, { strict: false });
+      // a question about the society's shared information (not about this resident, not a follow-up) is answered from
+      // the shared documents alone — no history, no personal records — so the answer can be kept and given to the
+      // next resident who asks the same thing (lib/answers.ts)
+      if (shareable(text, !!self.linkFor(text))) {
+        const shared = [...candidates, ...live.docs.filter(d => !d.title.startsWith('Your '))];
+        const key = answerKey(r.associationId, text, shared);
+        const kept = await storedAnswer(db, key);
+        if (kept) return done({ text: kept.text, source: kept.sources.join(' · '), link: self.linkFor(text) });
+        const general = await ai.answer(text, { docs: shared, today: live.today, history: [] });
+        if (general && general.sources.length) {
+          await storeAnswer(db, r.associationId, key, general);
+          return done({ text: general.text, source: general.sources.join(' · '), link: self.linkFor(text) });
+        }
+        // not in the shared information: ask again below with everything, and keep nothing
+      }
       // the live records always go in: "what's on this week" or "where is my issue" is answered from them
       const out = await ai.answer(text, { docs: [...candidates, ...live.docs, ...self.docs], today: live.today, history });
       if (out) return done({ text: out.text, source: out.sources.length ? out.sources.join(' · ') : null, chips: out.sources.length ? undefined : CHIPS, link: out.sources.length ? self.linkFor(text) : undefined, offer: out.sources.length ? undefined : 'ask_office' });
@@ -229,6 +254,7 @@ export const assistantRoutes = ({ config, db, ai }: Deps): FastifyPluginAsync =>
     const b = parse(z.object({ text: z.string().trim().min(3).max(4000), tone: z.enum(TONES) }), req.body);
     const cfg = await settings(r.associationId);
     if (!cfg.toneRewrite || cfg.tones[b.tone] === false) throw forbidden('This tone is switched off by your society admin.');
+    quota.take('rewrite', r.userId);
     const text = (ai.enabled ? await ai.rewrite(b.text, b.tone) : null) ?? ruleRewrite(b.text, b.tone);
     return { text, tone: b.tone };
   });

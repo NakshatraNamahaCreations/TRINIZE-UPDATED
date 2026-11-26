@@ -149,8 +149,9 @@ export const maintenanceRoutes = ({ config, db }: Deps): FastifyPluginAsync => a
     return db.select({
       id: vendors.id, name: vendors.name, category: vendors.category, contact: vendors.contact, phone: vendors.phone, email: vendors.email, serviceArea: vendors.serviceArea,
       active: vendors.active,
-      openJobs: sql<number>`(select count(*)::int from issues i where i.vendor_id = ${vendors.id} and i.status not in ('Resolved','Closed'))`,
-      rating: sql<number | null>`(select round(avg(i.rating), 1)::float from issues i where i.vendor_id = ${vendors.id})`,
+      // "vendors.id" written out: Drizzle prints ${vendors.id} as a bare "id" here, which the subquery reads as the issue's own id
+      openJobs: sql<number>`(select count(*)::int from issues i where i.vendor_id = vendors.id and i.status not in ('Resolved','Closed'))`,
+      rating: sql<number | null>`(select round(avg(i.rating), 1)::float from issues i where i.vendor_id = vendors.id)`,
     }).from(vendors).where(eq(vendors.associationId, aid)).orderBy(vendors.name);
   });
 

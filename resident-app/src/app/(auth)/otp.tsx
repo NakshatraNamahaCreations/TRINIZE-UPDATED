@@ -92,7 +92,7 @@ export default function Otp() {
     setPhase('checking');
     const r = await verifyOtp(c);
     if (!r.ok) {
-      setWhy(r.message ?? '');
+      setWhy(r.roleCheck ? t('otp.roleFailed') : r.message ?? '');
       setPhase('error');
       // clear after the shake so the user can retype straight away; the message stays until they do
       Animated.sequence([10, -10, 7, -7, 3, 0].map(x => Animated.timing(shake, { toValue: x, duration: 55, useNativeDriver: true })))

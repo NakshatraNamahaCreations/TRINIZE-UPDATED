@@ -1,14 +1,16 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Keyboard, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, TextInput, View, type ScrollViewInstance } from 'react-native';
+import { Animated, Image, Keyboard, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, TextInput, View, type ScrollViewInstance, type TextInputInstance } from 'react-native';
 import { useUI } from '@/components/Overlay';
 import { Btn, Header, Icon, Meta, Pill, Txt } from '@/components/ui';
 import { useT, type Key } from '@/i18n';
 import { ApiError, LIVE } from '@/lib/api';
+import { KindnessGuard } from '@/components/KindnessGuard';
 import { askOffice, fetchAssistantHistory, type HistoryItem } from '@/lib/live';
+import { rewriteLive } from '@/lib/live2';
 import { ImagePicker } from '@/lib/native';
-import type { IssueDraft } from '@/store/data';
-import { CHIP_FORM, CHIP_PHOTO } from '@/store/logic';
+import type { IssueDraft, Tone } from '@/store/data';
+import { CHIP_FORM, CHIP_PHOTO, rewrite, type Safety } from '@/store/logic';
 import { useStore } from '@/store/store';
 import { C, font } from '@/theme';
 
@@ -67,6 +69,11 @@ export default function Assistant() {
   const [input, setInput] = useState('');
   const [passed, setPassed] = useState<Record<number, boolean>>({});
   const scroll = useRef<ScrollViewInstance>(null);
+  const field = useRef<TextInputInstance>(null);
+  /** what the safety check said about the message the resident tried to send — it stays in the box, unsent */
+  const [guard, setGuard] = useState<Safety | null>(null);
+  const tones = (Object.keys(state.ai.tones) as Tone[]).filter(tn => state.ai.tones[tn]);
+  const canRewrite = state.ai.toneRewrite && tones.length > 0;
 
   // what the server holds from before this phone's log began, oldest first, fetched a page at a time
   const since = c.startedAt;
@@ -113,13 +120,13 @@ export default function Assistant() {
     }
   };
 
-  const handle = (text: string) => {
+  const handle = (text: string, onFlagged?: (verdict: Safety) => void) => {
     const low = text.trim().toLowerCase();
     if (low === 'open the directory') { router.navigate('/directory'); return; }
     if (low === 'open my issues') { router.navigate('/issues'); return; }
     if (text === CHIP_PHOTO) { pickPhoto(); return; }
     if (text === CHIP_FORM) { actions.sendChat('Start over'); router.navigate('/issues/new'); return; }
-    actions.sendChat(text);
+    actions.sendChat(text, onFlagged);
   };
   const call = (label: string, phone: string) =>
     Linking.openURL('tel:' + phone).catch(() => toast(t('dir.cantCall', { name: label }), 'call'));
@@ -135,8 +142,24 @@ export default function Assistant() {
   const send = () => {
     const v = input.trim();
     if (!v || c.busy) return;
+    // typed words are checked before they leave the phone; the chips are the app's own words
+    const safety = actions.checkPost(v);
+    if (safety.level !== 'safe') { Keyboard.dismiss(); setGuard(safety); actions.markTried('guard'); return; }
     setInput('');
-    handle(v);
+    // the server checks again — including tone, in every language — and may turn it back: same popup, text back in the box
+    handle(v, verdict => { setInput(v); Keyboard.dismiss(); setGuard(verdict); });
+  };
+  /** "Edit myself": the text stays in the box for the resident to change */
+  const editMyself = () => { setGuard(null); setTimeout(() => field.current?.focus(), 350); };
+  /** "Help me rewrite": the on-phone rewrite fills the box at once; the server's replaces it if it arrives before they edit */
+  const rewriteForMe = () => {
+    const asked = input.trim();
+    const tn: Tone = tones.includes('Polite') ? 'Polite' : (tones[0] ?? 'Polite');
+    const quick = rewrite(asked, tn);
+    setInput(quick);
+    setGuard(null);
+    if (LIVE) rewriteLive(asked, tn).then(better => setInput(cur => (cur === quick ? better : cur))).catch(() => {});
+    setTimeout(() => field.current?.focus(), 350);
   };
 
   return (
@@ -235,6 +258,7 @@ export default function Assistant() {
       </ScrollView>
       <View style={s.inRow}>
         <TextInput
+          ref={field}
           style={[s.in, c.busy && { backgroundColor: '#F4F6FA' }]}
           value={input} onChangeText={setInput} onSubmitEditing={send}
           placeholder={t('ai.placeholder')} placeholderTextColor={C.ink3}
@@ -244,6 +268,7 @@ export default function Assistant() {
           <Icon name="send" size={17} color="#fff" style={{ marginLeft: 2 }} />
         </Pressable>
       </View>
+      <KindnessGuard safety={guard} onEdit={editMyself} onRewrite={canRewrite ? rewriteForMe : undefined} />
     </KeyboardAvoidingView>
   );
 }

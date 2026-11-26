@@ -17,10 +17,10 @@ export type Access = { role: string; title: string | null; full: boolean; permis
 
 /** the section each page belongs to; a page not listed here (the dashboard, help) is open to everyone on the team */
 const PAGE: Record<string, string> = {
-  '/assistant': 'assistant', '/issues': 'issues', '/maintenance': 'maintenance', '/inspections': 'inspections',
-  '/gate': 'gate', '/accounts': 'accounts', '/owners': 'owners', '/moderation': 'moderation',
+  '/assistant': 'assistant', '/issues': 'issues', '/maintenance': 'maintenance', '/inspections': 'inspections', '/visits': 'issues',
+  '/gate': 'gate', '/accounts': 'accounts', '/owners': 'owners', '/moderation': 'moderation', '/community': 'moderation',
   '/communication': 'communication', '/announcements': 'announcements', '/events-polls': 'events', '/gallery': 'gallery',
-  '/residents': 'users', '/flats': 'users', '/users': 'users', '/directory': 'directory', '/ai': 'ai', '/audit': 'audit',
+  '/residents': 'users', '/flats': 'users', '/users': 'users', '/directory': 'directory', '/ai': 'ai', '/ai-usage': 'ai', '/audit': 'audit',
 };
 const sectionOf = (path: string) => Object.entries(PAGE).find(([to]) => path.startsWith(to))?.[1];
 

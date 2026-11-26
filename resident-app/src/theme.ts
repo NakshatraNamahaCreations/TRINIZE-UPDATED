@@ -26,6 +26,8 @@ export const C = {
 
 export const GRAD = {
   hero: ['#7C55F7', '#4C2BC4'] as const,
+  /** home "Grow Together" card: indigo → blue → teal */
+  grow: ['#4A2FD4', '#3A5BDB', '#22B892'] as const,
   brand: ['#8B5CF6', '#6D28D9'] as const,
   button: ['#7C55F7', '#5B34D6'] as const,
   gratitude: ['#FBF9FF', '#F3EEFF'] as const,

@@ -8,7 +8,8 @@ export const OTP_LENGTH = 6;
 export const RESEND_SECONDS = 30;
 
 /** ok, or the reason to show the resident */
-export type Outcome = { ok: true } | { ok: false; message?: string };
+/** `roleCheck`: signed in, but which app the number gets couldn't be worked out (the server failed or was out of reach) */
+export type Outcome = { ok: true } | { ok: false; message?: string; roleCheck?: boolean };
 
 export type Role = 'resident' | 'vpm' | 'guard';
 
@@ -60,14 +61,26 @@ export function AuthProvider({ initial, children }: { initial?: SavedAuth; child
       const s = await api<{ accessToken: string; refreshToken: string }>('POST', '/v1/auth/otp/verify', { phone, code }, { auth: false });
       setTokens({ access: s.accessToken, refresh: s.refreshToken });
       // a Virtual Property Manager's number (created by the operator) gets the manager's app
-      // …and a security guard's number (added by the society office) gets the gate
+      // …and a security guard's number (added by the society office) gets the gate.
+      // Only "you're not that" (403) moves on to the next app: any other failure (the server erred or was out of
+      // reach) stops sign-in with a message, rather than quietly opening the wrong app.
+      const notThis = (e: unknown) => e instanceof ApiError && e.status === 403 && e.code !== 'account_blocked';
       let next: Role = 'resident';
-      try { await api('GET', '/v1/me'); } catch (e) {
-        if (e instanceof ApiError && e.status === 403) {
-          try { await api('GET', '/v1/vpm/me'); next = 'vpm'; } catch {
-            try { await api('GET', '/v1/gate/me'); next = 'guard'; } catch { /* none of them: the resident screens explain */ }
+      try {
+        try { await api('GET', '/v1/me'); } catch (e) {
+          if (!notThis(e)) throw e;
+          try { await api('GET', '/v1/vpm/me'); next = 'vpm'; } catch (e2) {
+            if (!notThis(e2)) throw e2;
+            // none of them: the resident screens explain how to get a flat verified
+            try { await api('GET', '/v1/gate/me'); next = 'guard'; } catch (e3) { if (!notThis(e3)) throw e3; }
           }
         }
+      } catch (e) {
+        setTokens(null);
+        // clearing the session also forgets the number; keep it, so the code screen stays up and shows why
+        setPhone(phone);
+        // a blocked account keeps the office's own explanation
+        return e instanceof ApiError && e.code === 'account_blocked' ? failed(e) : { ok: false, roleCheck: true };
       }
       setRole(next);
       return { ok: true };

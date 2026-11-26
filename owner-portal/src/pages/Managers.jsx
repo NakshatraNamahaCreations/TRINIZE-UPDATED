@@ -1,4 +1,4 @@
-import { CircleAlert, LoaderCircle, Pencil, Trash2, UserPlus } from 'lucide-react';
+import { CircleAlert, LoaderCircle, Pencil, Star, Trash2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { DataList } from '../components/DataList';
 import { Kpi, PageHead, Pill } from '../components/ui';
@@ -128,7 +128,11 @@ function RemoveManager({ id }) {
 }
 
 export function Managers() {
-  const { vpms, openModal, go } = usePortal();
+  const { vpms, openModal, go, makePrimary } = usePortal();
+  // how many managers share each society, and who residents see there: the one marked primary,
+  // or else the first listed (the server's rule — demo data carries no flag)
+  const sharing = id => vpms.filter(x => x.societies.some(s => s.id === id));
+  const isPrimary = (v, s) => s.primary ?? sharing(s.id)[0]?.id === v.id;
   const covered = new Set(vpms.flatMap(v => v.societies.map(s => s.id)));
   const uncovered = ASSOC.filter(a => a.state !== 'Suspended' && !covered.has(a.id));
   const add = () => openModal(<AddManager />);
@@ -137,6 +141,7 @@ export function Managers() {
     <>
       <PageHead crumb="Delivery" title="Property managers" icon="busts_in_silhouette">
         Virtual property managers run the day-to-day for the societies you assign them: resident requests, vendors, bills and notices. <b>You create them here; they work only in the mobile app</b>, signing in with their mobile number.
+        When a society has more than one manager, the <Star size={12} fill="currentColor" style={{ verticalAlign: -1 }} /> marks the one residents see and call — click the outline star on another manager to switch.
       </PageHead>
 
       <div className="kpis">
@@ -161,7 +166,18 @@ export function Managers() {
             <div className="a-cell"><span className="mgr-av">{initials(v.name)}</span><span><b>{v.name}</b>{v.email && <i>{v.email}</i>}</span></div>
           ) },
           { key: 'phone', label: 'Signs in with', cell: v => <span className="num">+91 {v.phone.slice(0, 5)} {v.phone.slice(5)}<i className="a-sub">one-time code on the mobile app</i></span> },
-          { key: 'soc', label: 'Societies', dir: 'desc', sort: v => v.societies.length, cell: v => (v.societies.length ? <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{v.societies.map(s => <Pill key={s.id} tone="sky">{s.name}</Pill>)}</div> : <Pill tone="warn">None assigned</Pill>) },
+          { key: 'soc', label: 'Societies', dir: 'desc', sort: v => v.societies.length, cell: v => (v.societies.length ? <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>{v.societies.map(s => {
+            // a society with one manager needs no choice; with several, the star marks who residents see
+            if (sharing(s.id).length < 2) return <Pill key={s.id} tone="sky">{s.name}</Pill>;
+            const on = isPrimary(v, s);
+            return (
+              <button key={s.id} type="button" className={'soc-chip' + (on ? ' on' : '')} disabled={on} onClick={() => makePrimary(v.id, s.id)}
+                title={on ? `Residents of ${s.name} see ${v.name}` : `Show ${v.name} to residents of ${s.name} instead`}
+                aria-label={on ? `${s.name}: ${v.name} is shown to residents` : `Make ${v.name} the manager residents of ${s.name} see`}>
+                <Star size={11} fill={on ? 'currentColor' : 'none'} />{s.name}
+              </button>
+            );
+          })}</div> : <Pill tone="warn">None assigned</Pill>) },
           { key: 'open', label: 'Open requests', right: true, dir: 'desc', sort: v => v.openIssues, cell: v => <b className="num" style={{ color: 'var(--ink)' }}>{v.openIssues}</b> },
           { key: 'act', label: 'Actions', right: true, cell: v => (
             <div className="row-acts">

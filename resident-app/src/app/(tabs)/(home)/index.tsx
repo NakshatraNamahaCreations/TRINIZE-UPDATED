@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Image, Keyboard, Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance, type StyleProp, type ViewStyle } from 'react-native';
 import { AnnouncementCard } from '@/components/AnnouncementCard';
 import { GateHome } from '@/components/GateHome';
+import { ManagerHome } from '@/components/ManagerHome';
 import { useEnter, usePressScale } from '@/components/Motion';
 import { useUI } from '@/components/Overlay';
 import { useTour, useTourTarget } from '@/components/Tutorial';
@@ -11,7 +12,6 @@ import { BrandTile, Btn, CountUp, FadeIn, Header, Icon, IconTile, Meta, Screen, 
 import { useT, type Key } from '@/i18n';
 import { LIVE } from '@/lib/api';
 import { useAlbums } from '@/lib/gallery';
-import { greeting } from '@/lib/greeting';
 import { ME, myStats, SOCIETY } from '@/store/data';
 import type { ImpactFocus } from './impact';
 import { useStore } from '@/store/store';
@@ -34,19 +34,30 @@ const GUIDELINES: { l: Key; ic: IconName; bg: string; fg: string }[] = [
 
 const APressable = Animated.createAnimatedComponent(Pressable);
 
-/** Double-thump heartbeat on the hero's watermark heart, resting between beats. */
-function Heartbeat() {
-  const [b] = useState(() => new Animated.Value(0));
+/** "Grow Together" hero art — a young sprout on a soft mound, its leaves swaying gently. */
+function Sprout() {
+  const [sway] = useState(() => new Animated.Value(0));
   useEffect(() => {
-    const beat = (to: number, ms: number) => Animated.timing(b, { toValue: to, duration: ms, easing: Easing.out(Easing.quad), useNativeDriver: true });
-    const loop = Animated.loop(Animated.sequence([beat(1, 140), beat(0, 160), beat(0.6, 120), beat(0, 220), Animated.delay(1300)]));
+    const step = (to: number) => Animated.timing(sway, { toValue: to, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true });
+    const loop = Animated.loop(Animated.sequence([step(1), step(-1)]));
     loop.start();
     return () => loop.stop();
-  }, [b]);
+  }, [sway]);
+  const rotate = sway.interpolate({ inputRange: [-1, 1], outputRange: ['-5deg', '5deg'] });
   return (
-    <Animated.View style={[s.heroHeart, { transform: [{ scale: b.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] }) }] }]}>
-      <Icon name="heart" size={96} color="rgba(255,255,255,.13)" />
-    </Animated.View>
+    <View style={s.art} pointerEvents="none">
+      <View style={s.artGlow} />
+      <View style={[s.artDot, { top: 8, left: 14 }]} />
+      <View style={[s.artDot, { top: 20, right: 6, width: 5, height: 5 }]} />
+      <Icon name="sparkles" size={12} color="rgba(255,255,255,.75)" style={{ position: 'absolute', top: 2, right: 18 }} />
+      <Animated.View style={[s.artPlant, { transform: [{ rotate }] }]}>
+        <Icon name="leaf" size={30} color="#B9F3DD" style={{ transform: [{ scaleX: -1 }, { rotate: '-25deg' }], marginRight: -8 }} />
+        <Icon name="leaf" size={38} color="#E4FBF2" style={{ transform: [{ rotate: '-20deg' }], marginLeft: -8, marginTop: -14 }} />
+      </Animated.View>
+      <View style={s.artStem} />
+      <View style={s.artMound} />
+      <View style={s.artMoundFront} />
+    </View>
   );
 }
 
@@ -130,15 +141,23 @@ export default function Home() {
       {/* someone at the gate comes before everything else */}
       <GateHome />
       <FadeIn>
-        <LinearGradient colors={GRAD.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
-          <Heartbeat />
-          <Txt w={800} style={{ fontSize: 17, color: '#fff' }}>{t(greeting(), { name: ME.first })}</Txt>
-          <Txt style={{ fontSize: 12, color: 'rgba(255,255,255,.9)', marginTop: 2, lineHeight: 18 }}>
-            {t('home.heroLine')}{'\n'}{t('home.motto')}
-          </Txt>
-          <Btn variant="white" icon="sparkles" label={t('home.ask')} onPress={() => router.navigate('/assistant')} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
-        </LinearGradient>
+        <Pressable onPress={() => router.navigate('/assistant')} accessibilityRole="button" accessibilityLabel={t('home.ask')} style={({ pressed }) => [s.hero, pressed && { opacity: 0.94, transform: [{ scale: 0.99 }] }]}>
+          <LinearGradient colors={GRAD.grow} locations={[0, 0.5, 1]} start={{ x: 0, y: 0.2 }} end={{ x: 1, y: 1 }} style={s.heroIn}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Txt w={800} style={{ fontSize: 20, color: '#fff' }}>{t('home.grow.title')}</Txt>
+              <Txt w={500} style={{ fontSize: 13.5, color: 'rgba(255,255,255,.92)', marginTop: 4 }}>{t('home.grow.sub')}</Txt>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 }}>
+                <Txt w={600} style={{ fontSize: 13, color: '#fff' }}>{t('home.grow.motto')}</Txt>
+                <Icon name="heart" size={13} color="#FF6B6B" />
+              </View>
+            </View>
+            <Sprout />
+          </LinearGradient>
+        </Pressable>
       </FadeIn>
+
+      {/* the property manager and their next visit on site */}
+      <ManagerHome />
 
       <Sect title={t('home.impact')} />
       <View style={s.impact}>
@@ -242,8 +261,15 @@ export default function Home() {
 }
 
 const s = StyleSheet.create({
-  hero: { marginTop: 12, marginHorizontal: 14, borderRadius: 16, padding: 16, overflow: 'hidden' },
-  heroHeart: { position: 'absolute', right: -14, top: -18 },
+  hero: { marginTop: 12, marginHorizontal: 14, borderRadius: 18, overflow: 'hidden' },
+  heroIn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingLeft: 18, paddingRight: 12, minHeight: 112 },
+  art: { width: 96, height: 84, alignItems: 'center', justifyContent: 'flex-end' },
+  artGlow: { position: 'absolute', width: 78, height: 78, borderRadius: 39, top: 0, backgroundColor: 'rgba(255,255,255,.10)' },
+  artDot: { position: 'absolute', width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,.45)' },
+  artPlant: { position: 'absolute', bottom: 34, flexDirection: 'row', alignItems: 'flex-end', transformOrigin: 'bottom' },
+  artStem: { position: 'absolute', bottom: 18, width: 4, height: 22, borderRadius: 2, backgroundColor: '#9BE8C9' },
+  artMound: { width: 74, height: 26, borderTopLeftRadius: 37, borderTopRightRadius: 37, backgroundColor: 'rgba(16,140,110,.55)' },
+  artMoundFront: { position: 'absolute', bottom: 0, left: 6, width: 50, height: 16, borderTopLeftRadius: 25, borderTopRightRadius: 25, backgroundColor: '#2FC79C' },
   impact: { flexDirection: 'row', gap: 8, marginTop: 6, marginHorizontal: 14 },
   im: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 6, alignItems: 'center' },
   quicks: { flexDirection: 'row', gap: 8, paddingTop: 10, paddingHorizontal: 14 },

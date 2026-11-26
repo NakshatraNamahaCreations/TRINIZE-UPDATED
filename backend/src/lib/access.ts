@@ -36,25 +36,28 @@ const ROUTES: [RegExp, Section[]][] = [
   [/^(issues|approval-limit|vendors)\b/, ['issues', 'maintenance']],
   [/^(vendor-list|invoices|reports\/maintenance|follow-ups)\b/, ['maintenance']],
   [/^inspections\b/, ['inspections']],
+  [/^site-visits\b/, ['issues', 'inspections']],
   [/^(visits|guards|watchlist|gate-codes)\b/, ['gate']],
   [/^incidents\b/, ['gate']],
   [/^finance\b/, ['accounts']],
   [/^(owners|documents)\b/, ['owners']],
   [/^moderation-threshold\b/, ['moderation', 'ai']],
   [/^moderation\b/, ['moderation']],
+  [/^community-insights\b/, ['moderation']],
   [/^(comms|conversations)\b/, ['communication']],
   [/^announcements\b/, ['announcements']],
   [/^(events|polls|event-suggestions)\b/, ['events']],
   [/^gallery\b/, ['gallery']],
   [/^(units|towers|users|members|search)\b/, ['users']],
   [/^ai-audit\b/, ['ai', 'assistant']],
+  [/^ai-usage\b/, ['ai']],
   [/^(ai-settings|knowledge|facts)\b/, ['ai']],
   [/^directory\b/, ['directory']],
   [/^audit\b/, ['audit']],
   [/^assistant\b/, ['assistant']],
 ];
 /** open to everyone on the team: the plan, writing to Trinize, and "what may I use?" */
-const OPEN = /^(plan|support|setup|stats|staff\/me)\b/;
+const OPEN = /^(plan|support|setup|stats|staff\/me|my-notes)\b/;
 
 type Reader = Pick<DB, 'select'>;
 const memory = new WeakMap<object, Map<string, { at: number; sections: Section[] | null }>>();

@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import type { Config } from '../config.js';
 import type { Safety } from './safety.js';
+import type { UsageSink } from './usage.js';
 
 /* The AI features, behind one interface. With OPENAI_API_KEY set they run on an OpenAI GPT model;
    without it `enabled` is false and callers fall back to the built-in rules, so the API works either way. */
@@ -21,6 +22,8 @@ export interface Ai {
   compose(system: string, user: string): Promise<string | null>;
   /** a reply in a fixed shape, optionally looking at photos; null = unavailable or off-shape */
   extract<T>(o: { name: string; schema: object; check: z.ZodType<T>; system: string; user: string; images?: string[] }): Promise<T | null>;
+  /** where each model call's token counts are reported (see lib/usage.ts); providers without a bill ignore it */
+  setUsageSink?(sink: UsageSink): void;
 }
 
 export const noAi: Ai = { enabled: false, moderate: async () => null, answer: async () => null, rewrite: async () => null, compose: async () => null, extract: async () => null };
@@ -42,15 +45,15 @@ const REPLY_SCHEMA = {
   },
 } as const;
 
-const MODERATION = `You moderate posts in a residential society's community app in India. Residents write in English, Hindi, Kannada and mixed Hinglish.
+const MODERATION = `You moderate messages in a residential society's community app in India: posts, replies, thank-you notes, and messages residents type to the Community Assistant. Residents write in English, Hindi, Kannada, Tamil, Telugu, Malayalam, Marathi or Bengali - in their own script or in Latin letters - and often mix them (Hinglish, Kanglish, Tanglish). Judge the meaning in whatever language it is written, including disguised spellings ("f*ck", "l0ser", "b c").
 
 Classify one message:
-- "block": threats, slurs, sexual harassment, doxxing, or calls for harm.
-- "warn": insults or accusations aimed at a person or group (a neighbour, guard, committee member) - for example calling someone a scammer, thief or idiot.
-- "safe": everything else. Frustrated complaints about services, facilities or decisions are safe even when blunt ("the lift is useless", "third time this month").
+- "block": profanity and sexual slurs in any language, threats, wishing harm, caste or religious slurs, sexual harassment, doxxing, or calls for harm.
+- "warn": a rude, insulting or contemptuous message aimed at a person or group - a neighbour, guard, staff, the office, the committee, or the assistant itself - even without any swear word. For example: name-calling (idiot, loafer, nalayak, loosu), accusations (scammer, thief), commands and put-downs ("shut up", "do your job", "get lost", "are you blind?", "nobody cares what you think", "who do you think you are"), mocking or shaming ("sharam karo", "baayi muchko"), or shouting at someone in capitals.
+- "safe": everything else. Polite or neutral messages are safe. Frustrated complaints about services, facilities or decisions are safe even when blunt ("the lift is useless", "third time this month", "water has not come since morning").
 
-The line is between attacking people and criticising things. When unsure between safe and warn, choose safe.
-In "phrases", quote the exact words that caused a warn or block; leave it empty for safe.`;
+The line is between attacking or disrespecting people and criticising things. When unsure between safe and warn, choose safe.
+In "phrases", quote the exact words that caused a warn or block, as written; leave it empty for safe.`;
 
 const ASSISTANT = `You are the Community Assistant inside a residential society's app. You answer residents' questions about their own society.
 
@@ -71,6 +74,14 @@ export class OpenAiProvider implements Ai {
   enabled = true;
   private client: OpenAI;
   private verdicts = new Map<string, Safety>();
+  private sink: UsageSink | null = null;
+  setUsageSink(sink: UsageSink) { this.sink = sink; }
+  /** report what a call used — a refused or off-shape reply is still billed, so this runs before the reply is checked */
+  private async track(feature: string, model: string, res: { usage?: OpenAI.CompletionUsage | null }) {
+    const u = res.usage;
+    if (!this.sink || !u) return;
+    await this.sink({ feature, model, inputTokens: u.prompt_tokens ?? 0, cachedInputTokens: u.prompt_tokens_details?.cached_tokens ?? 0, outputTokens: u.completion_tokens ?? 0 });
+  }
   /** `model` answers questions; `fast` handles moderation and rewrite; `effort` is sent only when set */
   constructor(apiKey: string, private model: string, private fast: string = model, private effort: string = '') {
     this.client = new OpenAI({ apiKey });
@@ -88,6 +99,7 @@ export class OpenAiProvider implements Ai {
       ...this.extra(model),
       response_format: { type: 'json_schema', json_schema: { name, strict: true, schema: schema as Record<string, unknown> } },
     }, limits);
+    await this.track(name === 'verdict' ? 'moderate' : name === 'reply' ? 'answer' : 'extract:' + name, model, res);
     const msg = res.choices[0]?.message;
     if (!msg || msg.refusal || !msg.content) return null;
     try {
@@ -146,6 +158,7 @@ export class OpenAiProvider implements Ai {
           { role: 'user', content: text },
         ],
       }, { timeout: 15_000, maxRetries: 1 });
+      await this.track('rewrite', this.fast, res);
       const msg = res.choices[0]?.message;
       if (!msg || msg.refusal) return null;
       return msg.content?.trim() || null;
@@ -158,6 +171,7 @@ export class OpenAiProvider implements Ai {
   async compose(system: string, user: string): Promise<string | null> {
     try {
       const res = await this.client.chat.completions.create({ model: this.model, ...this.extra(this.model), messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }, { timeout: 30_000, maxRetries: 1 });
+      await this.track('compose', this.model, res);
       const msg = res.choices[0]?.message;
       return !msg || msg.refusal ? null : msg.content?.trim() || null;
     } catch (e) {

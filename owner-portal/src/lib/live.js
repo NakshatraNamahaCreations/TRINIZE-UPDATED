@@ -127,3 +127,9 @@ export const changePassword = (current, next) => api('POST', '/v1/auth/staff/pas
 export const createVpm = v => api('POST', '/v1/ops/vpms', v);
 export const setVpmSocieties = (id, associationIds) => api('PUT', `/v1/ops/vpms/${id}/societies`, { associationIds });
 export const removeVpm = id => api('DELETE', `/v1/ops/vpms/${id}`);
+/** the manager residents of a society see, when several manage it */
+/** AI tokens and cost over the last `days`, every society */
+export const aiUsage = days => api('GET', `/v1/ops/ai-usage?days=${days}`);
+/** a society's monthly AI cap in USD; null removes it */
+export const setAiBudget = (associationId, monthlyUsd) => api('PUT', `/v1/ops/ai-budgets/${associationId}`, { monthlyUsd });
+export const setPrimaryVpm = (id, associationId) => api('PUT', `/v1/ops/vpms/${id}/primary`, { associationId });

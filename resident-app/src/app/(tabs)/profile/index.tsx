@@ -1,11 +1,14 @@
 import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { LIVE } from '@/lib/api';
 import { StyleSheet, View } from 'react-native';
 import { NavRow } from '@/components/Settings';
 import { Btn, Card, Header, Meta, Screen, Sect, Txt } from '@/components/ui';
 import { LANGS, useT } from '@/i18n';
 import { confirm } from '@/lib/confirm';
+import { dues, rupees } from '@/lib/dues';
 import { DEMO } from '@/lib/flags';
+import { useFocusEffect } from '@/lib/refresh';
 import { formatPhone, useAuth } from '@/store/auth';
 import { ME, SOCIETY } from '@/store/data';
 import { TRY_TOTAL, useStore } from '@/store/store';
@@ -17,6 +20,9 @@ export default function Profile() {
   const { t, lang } = useT();
   const { phone, signOut } = useAuth();
   const notif = Object.values(state.settings.notif);
+  // what the flat owes: read each time Profile comes into view
+  const [owed, setOwed] = useState<number | null>(null);
+  useFocusEffect(useCallback(() => { dues().then(d => setOwed(d.due)).catch(() => {}); }, []));
   // a mis-tap shouldn't sign anyone out; their data stays saved for this number either way
   const askSignOut = () => confirm(t('signout.title'), t('signout.body', { phone: formatPhone(phone) }), t('profile.signout'), t('common.cancel'), () => { actions.reset(); signOut(); }, { icon: 'log-out-outline' });
 
@@ -39,6 +45,7 @@ export default function Profile() {
 
       <Sect title={t('profile.prefs')} />
       <Card delay={120} style={{ paddingVertical: 4 }}>
+        <NavRow icon="wallet-outline" title={t('dues.title')} sub={owed === null ? undefined : owed ? t('dues.home.due', { amount: rupees(owed) }) : t('dues.home.clear')} onPress={() => router.push('/dues')} />
         {LIVE && <NavRow icon="business-outline" title={t('own.title')} sub={t('own.entry.s')} onPress={() => router.push('/owner')} />}
         {LIVE && <NavRow icon="clipboard-outline" title={t('ins.mine')} sub={t('ins.mine.s')} onPress={() => router.push('/inspections')} />}
         <NavRow icon="chatbubbles-outline" title={t('profile.messages')} sub={t('profile.messages.s')} onPress={() => router.push('/messages')} />

@@ -7,9 +7,11 @@ import { Sidebar } from './components/Sidebar';
 import { ToastProvider } from './components/Toast';
 import { useToast } from './components/toast-context';
 import { AIControls } from './pages/AIControls';
+import { AiUsage } from './pages/AiUsage';
 import { Accounts } from './pages/Accounts';
 import { Assistant } from './pages/Assistant';
 import { Inspections } from './pages/Inspections';
+import { Visits } from './pages/Visits';
 import { Announcements } from './pages/Announcements';
 import { AuditLog } from './pages/AuditLog';
 import { Dashboard } from './pages/Dashboard';
@@ -22,6 +24,7 @@ import { OwnerDetail } from './pages/OwnerDetail';
 import { Owners } from './pages/Owners';
 import { UsersUnits } from './pages/UsersUnits';
 import { Communication } from './pages/Communication';
+import { Community } from './pages/Community';
 import { Gate } from './pages/Gate';
 import { Maintenance } from './pages/Maintenance';
 import { Gallery } from './pages/Gallery';
@@ -82,8 +85,10 @@ export default function App() {
                   <Route path="owners/:unitId" element={<OwnerDetail />} />
                   <Route path="assistant" element={<Assistant />} />
                   <Route path="inspections" element={<Inspections />} />
+                  <Route path="visits" element={<Visits />} />
                   <Route path="communication" element={<Communication />} />
                   <Route path="moderation" element={<Moderation />} />
+                  <Route path="community" element={<Community />} />
                   <Route path="announcements" element={<Announcements />} />
                   <Route path="events-polls" element={<EventsPolls />} />
                   <Route path="gallery" element={<Gallery />} />
@@ -93,6 +98,7 @@ export default function App() {
                   <Route path="directory" element={<Directory />} />
                   <Route path="team" element={<Team />} />
                   <Route path="ai" element={<AIControls />} />
+                  <Route path="ai-usage" element={<AiUsage />} />
                   <Route path="audit" element={<AuditLog />} />
                   <Route path="support" element={<Support />} />
                   <Route path="*" element={<Navigate to="/dashboard" replace />} />

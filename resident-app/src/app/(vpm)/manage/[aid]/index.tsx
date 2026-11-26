@@ -14,7 +14,8 @@ const TONE = { Emergency: 'bad', High: 'bad', Medium: 'warn', Low: 'dim' } as co
 
 /** One society's request queue, and a quick way to send its residents a notice. */
 export default function VpmQueue() {
-  const { aid, name, tab: startTab } = useLocalSearchParams<{ aid: string; name?: string; tab?: Tab }>();
+  // the dashboard's assistant can hand over a drafted notice
+  const { aid, name, tab: startTab, title: draftTitle, body: draftBody } = useLocalSearchParams<{ aid: string; name?: string; tab?: Tab; title?: string; body?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t, tx } = useT();
@@ -22,8 +23,8 @@ export default function VpmQueue() {
   const [tab, setTab] = useState<Tab>(startTab === 'notice' ? 'notice' : 'new');
   const [list, setList] = useState<Ticket[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
+  const [title, setTitle] = useState(draftTitle ?? '');
+  const [body, setBody] = useState(draftBody ?? '');
   const [important, setImportant] = useState<'Normal' | 'High'>('Normal');
   const [sending, setSending] = useState(false);
 

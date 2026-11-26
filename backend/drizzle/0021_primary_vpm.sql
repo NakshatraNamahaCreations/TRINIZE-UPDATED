@@ -1,0 +1,2 @@
+ALTER TABLE "associations" ADD COLUMN "primary_vpm_id" uuid;--> statement-breakpoint
+ALTER TABLE "associations" ADD CONSTRAINT "associations_primary_vpm_id_users_id_fk" FOREIGN KEY ("primary_vpm_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;

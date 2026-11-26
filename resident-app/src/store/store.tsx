@@ -36,13 +36,23 @@ function useActions(update: (fn: (d: Draft<State>) => void) => void, ref: { curr
     },
 
     /* ---- assistant ---- */
-    sendChat(text: string) {
+    /** `onFlagged`: the server found the message rude and did not answer it — the screen hands it back to be rephrased */
+    sendChat(text: string, onFlagged?: (verdict: { level: 'warn' | 'block'; words: string[] }) => void) {
       if (ref.current.chat.busy) return; // stops rapid chip taps stacking replies
       update(d => { d.chat.log.push({ who: 'me', text }); d.chat.busy = true; });
       if (LIVE && !handledInApp(ref.current.chat, text)) {
         // a real question: the server's assistant answers from the society's documents and live records
         askAssistant(text).then(r => update(d => {
           d.chat.busy = false;
+          if (r.flagged) {
+            // turned back as rude: take the message out of the log and hand it to the screen to rephrase
+            const at = d.chat.log.map(m => m.who === 'me' && m.text === text).lastIndexOf(true);
+            if (at >= 0) d.chat.log.splice(at, 1);
+            d.tried.guard = true;
+            const verdict = r.flagged;
+            setTimeout(() => onFlagged?.({ level: verdict.level, words: verdict.words }), 0);
+            return;
+          }
           d.chat.log.push({ who: 'ai', text: r.text, src: r.source, chips: r.chips ?? ['Report an issue'], calls: r.calls, link: r.link, offer: r.offer });
           d.tried.ask = true;
           // the server keeps the question (unless assistant history is off), so the impact figures move with it

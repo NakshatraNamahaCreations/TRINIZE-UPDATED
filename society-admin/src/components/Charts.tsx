@@ -106,3 +106,96 @@ export function CategoryBars({ issues }: { issues: Issue[] }) {
     </div>
   );
 }
+
+/** Monthly line of the share of writing that passed the safety check. Months with nothing written leave a gap. */
+/** Community hub chart colours, taken from the design */
+const BLUE = '#3B6EF0', TEAL = '#5ED3C3', GREEN = '#12A36B';
+
+/** legend for WeekBars, in the same colours */
+export const WeekLegend = () => <div className="leg"><span><i style={{ background: TEAL }} />Reported</span><span><i style={{ background: GREEN }} />Resolved</span></div>;
+
+export function PositivityChart({ trend }: { trend: { month: string; total: number; positive: number | null }[] }) {
+  const { show, hide, el } = useTip();
+  const W = 520, H = 170, P = 30;
+  const last = Math.max(1, trend.length - 1);
+  const known = trend.map(t => t.positive).filter((v): v is number => v !== null);
+  // a floor below the lowest month so small changes still read, never above 60 so 100% doesn't look flat-lined
+  const minY = Math.max(0, Math.min(60, Math.floor((Math.min(...known, 100) - 10) / 10) * 10));
+  const x = (i: number) => P + i * ((W - P - 12) / last);
+  const y = (v: number) => H - P + 6 - ((v - minY) / (100 - minY)) * (H - P - 24);
+  const pts = trend.map((t, i) => (t.positive === null ? null : ([x(i), y(t.positive)] as const)));
+  // a run of consecutive known months is one segment
+  const segs: string[] = [];
+  let cur = '';
+  pts.forEach(p => { if (p) cur += (cur ? ' L' : 'M') + p[0] + ',' + p[1]; else if (cur) { segs.push(cur); cur = ''; } });
+  if (cur) segs.push(cur);
+  const grid = [0, 1, 2, 3].map(k => minY + ((100 - minY) / 3) * k);
+
+  if (!known.length) return <Empty icon={CheckCircle} title="Nothing written yet" body="The trend starts once residents post, reply or send thanks." />;
+  return (
+    <div onPointerLeave={hide}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Share of writing that passed the safety check, by month">
+        <defs>
+          <linearGradient id="pos-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={BLUE} stopOpacity=".22" /><stop offset="1" stopColor={BLUE} stopOpacity="0" /></linearGradient>
+        </defs>
+        {grid.map(g => (
+          <g key={g}>
+            <line x1={P} y1={y(g)} x2={W - 8} y2={y(g)} stroke="var(--line)" />
+            <text x={P - 7} y={y(g) + 3} fill="var(--ink3)" fontSize="9" textAnchor="end" className="num">{Math.round(g)}%</text>
+          </g>
+        ))}
+        {segs.map((d, i) => {
+          const xs = d.split(/[ML ]+/).filter(Boolean).map(p => Number(p.split(',')[0]));
+          return <path key={'a' + i} d={`${d} L${xs[xs.length - 1]},${y(minY)} L${xs[0]},${y(minY)} Z`} fill="url(#pos-fill)" />;
+        })}
+        {segs.map((d, i) => <path key={'l' + i} d={d} fill="none" stroke={BLUE} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />)}
+        {trend.map((t, i) => t.positive !== null && (
+          <g key={t.month + i}>
+            <circle cx={x(i)} cy={y(t.positive)} r={i === trend.length - 1 ? 4 : 3} fill={BLUE} stroke="#fff" strokeWidth="1.5" pointerEvents="none" />
+            <circle cx={x(i)} cy={y(t.positive)} r="9" fill="transparent" style={{ cursor: 'pointer' }}
+              onPointerMove={show(`${t.positive}% positive · ${t.month} · ${t.total} written`)} onPointerDown={show(`${t.positive}% positive · ${t.month} · ${t.total} written`)} />
+          </g>
+        ))}
+        {trend.map((t, i) => <text key={'m' + i} x={x(i)} y={H - 6} fill={i === trend.length - 1 ? 'var(--ink2)' : 'var(--ink3)'} fontWeight={i === trend.length - 1 ? 700 : 400} fontSize="8.5" textAnchor="middle">{t.month}</text>)}
+      </svg>
+      {el}
+    </div>
+  );
+}
+
+/** Seven days of new flags and reports beside the decisions made, as paired bars. */
+export function WeekBars({ week }: { week: { day: string; reported: number; resolved: number }[] }) {
+  const { show, hide, el } = useTip();
+  const W = 300, H = 140, P = 22;
+  const maxY = Math.max(4, ...week.flatMap(d => [d.reported, d.resolved]));
+  const slot = (W - P - 6) / Math.max(1, week.length);
+  const bw = Math.min(11, slot / 3);
+  const y = (v: number) => H - 20 - (v / maxY) * (H - 34);
+  const tr = week.reduce((a, d) => a + d.reported, 0), td = week.reduce((a, d) => a + d.resolved, 0);
+  return (
+    <div onPointerLeave={hide}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="Reported versus resolved, last 7 days">
+        {[0, maxY / 2, maxY].map(g => (
+          <g key={g}>
+            <line x1={P} y1={y(g)} x2={W - 4} y2={y(g)} stroke="var(--line)" />
+            <text x={P - 6} y={y(g) + 3} fill="var(--ink3)" fontSize="9" textAnchor="end" className="num">{Math.round(g)}</text>
+          </g>
+        ))}
+        {week.map((d, i) => {
+          const cx = P + slot * i + slot / 2;
+          const label = `${d.day}${i === week.length - 1 ? ' (today)' : ''} · ${d.reported} reported · ${d.resolved} resolved`;
+          return (
+            <g key={d.day + i} style={{ cursor: 'pointer' }} onPointerMove={show(label)} onPointerDown={show(label)}>
+              <rect x={cx - slot / 2} y={8} width={slot} height={H - 28} fill="transparent" />
+              <rect x={cx - bw - 1} y={y(d.reported)} width={bw} height={Math.max(0, y(0) - y(d.reported))} rx="2" fill={TEAL} />
+              <rect x={cx + 1} y={y(d.resolved)} width={bw} height={Math.max(0, y(0) - y(d.resolved))} rx="2" fill={GREEN} />
+              <text x={cx} y={H - 6} fill={i === week.length - 1 ? 'var(--ink2)' : 'var(--ink3)'} fontWeight={i === week.length - 1 ? 700 : 400} fontSize="9" textAnchor="middle">{d.day}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="foot num">7-day total: {tr} reported · {td} resolved</div>
+      {el}
+    </div>
+  );
+}

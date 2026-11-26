@@ -331,14 +331,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       failed.current = true;
     }
   }, [toast]);
-  // load on sign-in, then keep the queue fresh so a resident's new issue appears without a reload
+  // load on sign-in, then keep the queue fresh so a resident's new issue appears without a reload.
+  // Each refresh is about a dozen requests: every 30 s while someone is using the console, every 90 s once
+  // nobody has clicked or typed for 2 minutes, never while the tab is hidden — so a few staff on one office
+  // connection stay well inside the server's request limit.
   useEffect(() => {
     if (!LIVE || !signedIn) return;
-    const tick = () => { if (document.visibilityState === 'visible') void sync(); };
-    tick();
-    const h = setInterval(tick, 20_000);
-    document.addEventListener('visibilitychange', tick);
-    return () => { clearInterval(h); document.removeEventListener('visibilitychange', tick); };
+    const poll = { last: Date.now(), inFlight: false, timer: undefined as ReturnType<typeof setTimeout> | undefined };
+    const seen = () => { poll.last = Date.now(); };
+    const run = async () => {
+      if (poll.inFlight || document.visibilityState !== 'visible') return;
+      poll.inFlight = true; // a slow answer never stacks a second refresh on top of the first
+      try { await sync(); } finally { poll.inFlight = false; }
+    };
+    const loop = () => {
+      poll.timer = setTimeout(() => { void run().finally(loop); }, Date.now() - poll.last > 120_000 ? 90_000 : 30_000);
+    };
+    // back on the tab: refresh at once (it may have been a while), then carry on the usual rhythm
+    const back = () => { if (document.visibilityState === 'visible') { seen(); void run(); } };
+    void run();
+    loop();
+    window.addEventListener('pointerdown', seen);
+    window.addEventListener('keydown', seen);
+    document.addEventListener('visibilitychange', back);
+    return () => {
+      clearTimeout(poll.timer);
+      window.removeEventListener('pointerdown', seen);
+      window.removeEventListener('keydown', seen);
+      document.removeEventListener('visibilitychange', back);
+    };
   }, [signedIn, sync]);
 
   const update = useCallback((fn: (d: Draft<State>) => void) => setState(s => produce(s, fn)), []);

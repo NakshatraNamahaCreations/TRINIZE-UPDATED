@@ -257,6 +257,89 @@ export const admin2Routes = ({ config, db }: Deps): FastifyPluginAsync => async 
     return { gratitudes: g?.n ?? 0 };
   });
 
+  /**
+   * Community health, for the console's Community page. Read-only and computed from what is already stored:
+   * there is no sentiment score, so "positive" is the share of posts, replies and gratitude notes that passed
+   * the safety check (nothing the check flagged; resident reports are counted separately). Days are IST days.
+   */
+  app.get('/:aid/community-insights', async req => {
+    const { aid } = await staff(req);
+    const q = async <T>(query: ReturnType<typeof sql>) => ((await db.execute(query)) as unknown as { rows: T[] }).rows;
+    const today = sql`(now() at time zone 'Asia/Kolkata')::date`;
+    const day = (col: string) => sql.raw(`(${col} at time zone 'Asia/Kolkata')::date`);
+
+    const [members] = await q<{ total: number; active: number; prev: number }>(sql`
+      with m as (select distinct m.user_id from unit_members m join units u on u.id = m.unit_id join users us on us.id = m.user_id
+                 where u.association_id = ${aid} and m.status = 'active' and us.deleted_at is null)
+      select (select count(*) from m)::int as total,
+             (select count(distinct a.user_id) from active_days a join m on m.user_id = a.user_id where a.day > ${today} - 30)::int as active,
+             (select count(distinct a.user_id) from active_days a join m on m.user_id = a.user_id where a.day > ${today} - 60 and a.day <= ${today} - 30)::int as prev`);
+
+    // everything residents wrote, one row per piece, with the IST day it was written
+    const content = sql`(
+      select ${day('p.created_at')} as d from posts p where p.association_id = ${aid}
+      union all select ${day('r.created_at')} from replies r join posts p on p.id = r.post_id where p.association_id = ${aid}
+      union all select ${day('g.created_at')} from gratitudes g where g.association_id = ${aid})`;
+    // what the safety check flagged (resident reports are not a verdict on tone)
+    const flagged = sql`(select ${day('m.created_at')} as d from moderation_items m where m.association_id = ${aid} and m.category <> 'Reported by a resident')`;
+
+    const [writing] = await q<{ today: number; yesterday: number; total30: number; flagged30: number; totalPrev: number; flaggedPrev: number }>(sql`
+      select (select count(*) from posts p where p.association_id = ${aid} and ${day('p.created_at')} = ${today})::int
+           + (select count(*) from replies r join posts p on p.id = r.post_id where p.association_id = ${aid} and ${day('r.created_at')} = ${today})::int as today,
+             (select count(*) from posts p where p.association_id = ${aid} and ${day('p.created_at')} = ${today} - 1)::int
+           + (select count(*) from replies r join posts p on p.id = r.post_id where p.association_id = ${aid} and ${day('r.created_at')} = ${today} - 1)::int as yesterday,
+             (select count(*) from ${content} c where c.d > ${today} - 30)::int as total30,
+             (select count(*) from ${flagged} f where f.d > ${today} - 30)::int as flagged30,
+             (select count(*) from ${content} c where c.d > ${today} - 60 and c.d <= ${today} - 30)::int as "totalPrev",
+             (select count(*) from ${flagged} f where f.d > ${today} - 60 and f.d <= ${today} - 30)::int as "flaggedPrev"`);
+
+    const [held] = await q<{ now: number; prev: number }>(sql`
+      with h as (
+        select ${day('p.created_at')} as d from posts p where p.association_id = ${aid} and p.state <> 'published'
+        union all select ${day('r.created_at')} from replies r join posts p on p.id = r.post_id where p.association_id = ${aid} and r.state <> 'published'
+        union all select ${day('g.created_at')} from gratitudes g where g.association_id = ${aid} and g.state = 'held')
+      select count(*) filter (where d > ${today} - 30)::int as now, count(*) filter (where d > ${today} - 60 and d <= ${today} - 30)::int as prev from h`);
+
+    // last 7 months, oldest first — share of writing that passed the safety check
+    const trend = await q<{ month: string; total: number; flagged: number }>(sql`
+      with months as (select generate_series(date_trunc('month', ${today}) - interval '6 months', date_trunc('month', ${today}), interval '1 month')::date as m)
+      select to_char(months.m, 'Mon') as month,
+             (select count(*) from ${content} c where date_trunc('month', c.d) = months.m)::int as total,
+             (select count(*) from ${flagged} f where date_trunc('month', f.d) = months.m)::int as flagged
+      from months order by months.m`);
+
+    // last 7 days, oldest first — new flags and reports against decisions made
+    const week = await q<{ day: string; reported: number; resolved: number }>(sql`
+      with days as (select generate_series(${today} - 6, ${today}, interval '1 day')::date as d)
+      select to_char(days.d, 'Dy') as day,
+             (select count(*) from moderation_items m where m.association_id = ${aid} and ${day('m.created_at')} = days.d)::int as reported,
+             (select count(*) from moderation_items m where m.association_id = ${aid} and m.resolved_at is not null and ${day('m.resolved_at')} = days.d)::int as resolved
+      from days order by days.d`);
+
+    const alerts = await db.select({ id: moderationItems.id, number: moderationItems.number, kind: moderationItems.kind, category: moderationItems.category,
+      severity: moderationItems.severity, state: moderationItems.state, createdAt: moderationItems.createdAt, by: users.name })
+      .from(moderationItems).leftJoin(users, eq(users.id, moderationItems.authorId))
+      .where(eq(moderationItems.associationId, aid)).orderBy(desc(moderationItems.createdAt)).limit(4);
+
+    // who sends the most thanks — counts only, never the notes themselves (they are private to the recipient)
+    const givers = await q<{ id: string | null; name: string; n: number }>(sql`
+      select g.from_id as id, coalesce(u.name, 'Former resident') as name, count(*)::int as n from gratitudes g left join users u on u.id = g.from_id
+      where g.association_id = ${aid} and g.state = 'sent' and ${day('g.created_at')} > ${today} - 30
+      group by g.from_id, u.name order by n desc, name limit 5`);
+
+    const share = (total: number, bad: number) => (total ? Math.round(((total - Math.min(bad, total)) / total) * 100) : null);
+    return {
+      members: { total: members?.total ?? 0, active: members?.active ?? 0, prev: members?.prev ?? 0 },
+      posts: { today: writing?.today ?? 0, yesterday: writing?.yesterday ?? 0 },
+      positive: { now: share(writing?.total30 ?? 0, writing?.flagged30 ?? 0), prev: share(writing?.totalPrev ?? 0, writing?.flaggedPrev ?? 0), written: writing?.total30 ?? 0 },
+      held: { now: held?.now ?? 0, prev: held?.prev ?? 0 },
+      trend: trend.map(t => ({ month: t.month, total: t.total, positive: share(t.total, t.flagged) })),
+      week,
+      alerts: alerts.map(({ number, ...a }) => ({ ...a, ref: 'MOD-' + number, by: a.by ?? 'Former resident' })),
+      givers,
+    };
+  });
+
   /* ---------- people ---------- */
   app.get('/:aid/users', async req => {
     const { aid } = await staff(req);

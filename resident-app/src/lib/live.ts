@@ -135,7 +135,11 @@ export async function fetchPolls(): Promise<Poll[]> {
 export const voteLive = (pollId: string, index: number) => api('POST', `/v1/polls/${pollId}/vote`, { optionId: optionIds.get(pollId)?.[index] });
 
 /* ---------- assistant ---------- */
-export type AssistantReply = { text: string; source: string | null; chips?: string[]; calls?: [string, string][]; link?: { label: string; href: string }; offer?: 'ask_office' };
+export type AssistantReply = {
+  text: string; source: string | null; chips?: string[]; calls?: [string, string][]; link?: { label: string; href: string }; offer?: 'ask_office';
+  /** the server's safety check found it rude: not answered, not kept — hand it back to be rephrased */
+  flagged?: { level: 'warn' | 'block'; words: string[] };
+};
 /** the assistant could not answer: pass the question to the society office as a message */
 export const askOffice = (text: string) => api<{ conversationId: string }>('POST', '/v1/assistant/ask-office', { text });
 export const askAssistant = (text: string) => api<AssistantReply>('POST', '/v1/assistant/chat', { text });

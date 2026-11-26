@@ -124,6 +124,10 @@ button.kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow-up);border-c
 .pill.warn{color:var(--warn);background:var(--warn-bg)}
 .pill.bad{color:var(--bad);background:var(--bad-bg)}
 .pill.sky{color:var(--acc-ink);background:var(--acc-bg)}
+/* a society shared by several property managers: the star marks who residents see */
+.soc-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;line-height:1.5;padding:0 7px;border-radius:5px;white-space:nowrap;border:1px dashed var(--line2);color:var(--ink2);background:transparent;cursor:pointer}
+.soc-chip:hover{border-color:var(--acc);color:var(--acc-ink)}
+.soc-chip.on{border:1px solid transparent;color:var(--good);background:var(--good-bg);cursor:default}
 .pill.ai{color:var(--acc-ink);background:var(--acc-bg)}
 .pill.dim{color:var(--ink2);background:var(--raise)}
 

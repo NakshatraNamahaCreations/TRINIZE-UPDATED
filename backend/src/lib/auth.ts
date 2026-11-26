@@ -5,6 +5,8 @@ import type { DB } from '../db/client.js';
 import { refreshTokens, staffRoles, standings, unitMembers, units, users, type StaffRole } from '../db/schema.js';
 import { opaqueToken, sha256 } from './crypto.js';
 import { forbidden, HttpError, unauthorized } from './http.js';
+import { seen } from './presence.js';
+import { attribute } from './usage.js';
 
 const ACCESS_TTL = '15m';
 const REFRESH_DAYS = 30;
@@ -87,6 +89,7 @@ export async function residentOf(db: DB, userId: string): Promise<Resident> {
   // blocked by the office: nothing a resident can do in the app works until they are unblocked
   if (m.standing === 'Blocked') throw blockedError();
   const { standing: _s, ...resident } = m;
+  attribute(resident.userId, resident.associationId); // AI tokens this request uses count against this resident and society
   return resident;
 }
 
@@ -102,6 +105,8 @@ export async function staffOf(db: DB, userId: string, associationId: string | nu
   const can = (role: StaffRole) => allowed.includes(role) || (role === 'vpm' && allowed.includes('admin'));
   const hit = rows.find(r => can(r.role) && (r.role === 'operator' || (associationId !== null && r.associationId === associationId)));
   if (!hit) throw forbidden();
+  attribute(hit.userId, associationId ?? hit.associationId);
+  if (hit.role === 'vpm') await seen(db, hit.userId); // residents see their property manager as online
   return hit;
 }
 

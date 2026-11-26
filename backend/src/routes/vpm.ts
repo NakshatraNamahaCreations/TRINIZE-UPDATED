@@ -2,8 +2,10 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../app.js';
-import { associations, issues, opsActivity, refreshTokens, staffRoles, users } from '../db/schema.js';
+import { associations, issues, opsActivity, primaryVpms as chosenVpms, refreshTokens, staffRoles, users } from '../db/schema.js';
 import { staffOf, userIdFrom } from '../lib/auth.js';
+import { seen } from '../lib/presence.js';
+import { primaryVpms } from '../lib/vpm.js';
 import { conflict, forbidden, notFound, parse } from '../lib/http.js';
 
 const Phone = z.string().regex(/^[6-9]\d{9}$/, 'Mobile numbers have 10 digits and start with 6, 7, 8 or 9');
@@ -35,6 +37,15 @@ export const vpmRoutes = ({ config, db }: Deps): FastifyPluginAsync => async app
     }).from(staffRoles).innerJoin(associations, eq(associations.id, staffRoles.associationId))
       .where(and(eq(staffRoles.userId, userId), eq(staffRoles.role, 'vpm'))).orderBy(associations.name);
     if (!user || !rows.length) throw forbidden('This number isn’t set up as a property manager, or no societies are assigned yet.');
+    await seen(db, userId);
+    // residents' unread messages, and visit requests waiting for an answer — counted apart, so that a table not yet
+    // created (a migration not run) leaves the count out instead of stopping the manager from signing in
+    const count = async (q: ReturnType<typeof sql>) => { try { return ((await db.execute(q)) as unknown as { rows: { aid: string; n: number }[] }).rows; } catch { return null; } };
+    const ids = sql.join(rows.map(r => sql`${r.id}`), sql`, `);
+    const unread = await count(sql`select c.association_id as aid, count(*)::int as n from conversation_messages m join conversations c on c.id = m.conversation_id
+      where c.association_id in (${ids}) and m.from_role = 'resident' and m.read_at is null group by c.association_id`);
+    const waiting = await count(sql`select association_id as aid, count(*)::int as n from site_visit_items where association_id in (${ids}) and status = 'Requested' group by association_id`);
+    const societies = rows.map(r => ({ ...r, unread: unread ? unread.find(u => u.aid === r.id)?.n ?? 0 : undefined, visitRequests: waiting ? waiting.find(w => w.aid === r.id)?.n ?? 0 : undefined }));
     // emergencies first, then what is past its response time, then what nobody has picked up yet
     const attention = await db.select({
       aid: issues.associationId, society: associations.short, number: issues.number, title: issues.title, category: issues.category, priority: issues.priority, status: issues.status, slaDueAt: issues.slaDueAt,
@@ -43,7 +54,7 @@ export const vpmRoutes = ({ config, db }: Deps): FastifyPluginAsync => async app
       .where(and(inArray(issues.associationId, rows.map(r => r.id)), sql`${issues.status} not in ('Resolved','Closed')`,
         sql`(${issues.priority} = 'Emergency' or ${issues.status} = 'Submitted' or (${issues.slaDueAt} < now() and ${issues.status} <> 'On Hold'))`))
       .orderBy(sql`case when ${issues.priority} = 'Emergency' then 0 when ${issues.slaDueAt} < now() then 1 else 2 end`, issues.slaDueAt).limit(6);
-    return { user, societies: rows, attention: attention.map(({ number, ...a }) => ({ ...a, ref: 'ISS-' + number })) };
+    return { user, societies, attention: attention.map(({ number, ...a }) => ({ ...a, ref: 'ISS-' + number })) };
   });
 
   /* =============== the operator, in the Owner Portal =============== */
@@ -54,8 +65,12 @@ export const vpmRoutes = ({ config, db }: Deps): FastifyPluginAsync => async app
       .from(staffRoles).innerJoin(associations, eq(associations.id, staffRoles.associationId)).where(eq(staffRoles.role, 'vpm'));
     const open = await db.select({ associationId: issues.associationId, n: sql<number>`count(*)::int` }).from(issues)
       .where(sql`${issues.status} not in ('Resolved','Closed')`).groupBy(issues.associationId);
+    // who residents see in each society, and how many managers share it
+    const primary = await primaryVpms(db);
     return people.map(p => {
-      const societies = links.filter(l => l.userId === p.id).map(({ id, name }) => ({ id, name }));
+      const societies = links.filter(l => l.userId === p.id).map(({ id, name }) => ({
+        id, name, primary: primary.get(id) === p.id, shared: links.filter(l => l.id === id).length,
+      }));
       return { ...p, societies, openIssues: societies.reduce((n, s) => n + (open.find(o => o.associationId === s.id)?.n ?? 0), 0) };
     }).sort((a, b) => a.name.localeCompare(b.name));
   };
@@ -99,7 +114,23 @@ export const vpmRoutes = ({ config, db }: Deps): FastifyPluginAsync => async app
       await tx.insert(staffRoles).values(want.map(associationId => ({ userId: id, associationId, role: 'vpm' as const, title: 'Property Manager' })));
       await tx.insert(opsActivity).values({ who: op.name, what: `reassigned ${vpm.name} · now ${want.length} ${want.length === 1 ? 'society' : 'societies'}` });
     });
+    // a society they no longer manage stops showing them to residents
+    try { await db.delete(chosenVpms).where(and(eq(chosenVpms.userId, id), sql`${chosenVpms.associationId} not in (${sql.join(want.map(w => sql`${w}`), sql`, `)})`)); } catch { /* not migrated yet: nothing was chosen */ }
     return (await listVpms()).find(v => v.id === id);
+  });
+
+  /** Make this VPM the one residents of a society see (and call) when several manage it. */
+  app.put('/ops/vpms/:id/primary', async req => {
+    const op = await operator(req);
+    const { id } = parse(z.object({ id: z.uuid() }), req.params);
+    const { associationId } = parse(z.object({ associationId: z.uuid() }), req.body);
+    const [link] = await db.select({ name: users.name, society: associations.name }).from(staffRoles)
+      .innerJoin(users, eq(users.id, staffRoles.userId)).innerJoin(associations, eq(associations.id, staffRoles.associationId))
+      .where(and(eq(staffRoles.userId, id), eq(staffRoles.role, 'vpm'), eq(staffRoles.associationId, associationId)));
+    if (!link) throw notFound('That property manager in that society');
+    await db.insert(chosenVpms).values({ associationId, userId: id }).onConflictDoUpdate({ target: chosenVpms.associationId, set: { userId: id, updatedAt: new Date() } });
+    await db.insert(opsActivity).values({ who: op.name, what: `made ${link.name} the primary property manager for ${link.society}` });
+    return listVpms();
   });
 
   /** Remove a VPM: their access to every society ends and they are signed out everywhere. */
@@ -108,6 +139,7 @@ export const vpmRoutes = ({ config, db }: Deps): FastifyPluginAsync => async app
     const { id } = parse(z.object({ id: z.uuid() }), req.params);
     const gone = await db.delete(staffRoles).where(and(eq(staffRoles.userId, id), eq(staffRoles.role, 'vpm'))).returning();
     if (!gone.length) throw notFound('Property manager');
+    try { await db.delete(chosenVpms).where(eq(chosenVpms.userId, id)); } catch { /* not migrated yet: nothing was chosen */ }
     await db.update(refreshTokens).set({ revokedAt: new Date() }).where(and(eq(refreshTokens.userId, id), isNull(refreshTokens.revokedAt)));
     const [u] = await db.select({ name: users.name }).from(users).where(eq(users.id, id));
     await db.insert(opsActivity).values({ who: op.name, what: `removed property manager ${u?.name ?? ''}` });

@@ -17,6 +17,7 @@ import { Modules } from './pages/Modules';
 import { Renewals } from './pages/Renewals';
 import { Subscriptions } from './pages/Subscriptions';
 import { Team } from './pages/Team';
+import { AiUsage } from './pages/AiUsage';
 import { AuthProvider } from './store/AuthProvider';
 import { LIVE } from './lib/api';
 import { useAuth, usePortal } from './store/context';
@@ -104,6 +105,7 @@ export default function App() {
                 <Route path="managers" element={<Managers />} />
                 <Route path="modules" element={<Modules />} />
                 {LIVE && <Route path="team" element={<Team />} />}
+                {LIVE && <Route path="ai-usage" element={<AiUsage />} />}
                 <Route path="changed" element={<Changed />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

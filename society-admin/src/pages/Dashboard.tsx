@@ -5,6 +5,7 @@ import { LIVE } from '../lib/api';
 import { allowed, useAccess } from '../lib/access';
 import { setupLive, type SetupStep } from '../lib/live';
 import { CategoryBars, TrendChart } from '../components/Charts';
+import { OpsPanels } from '../components/OpsPanels';
 import { Empty, PanelHead, Pill } from '../components/ui';
 import { greeting } from '../lib/format';
 import { useAuth } from '../auth/auth-context';
@@ -124,6 +125,9 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* the Virtual Property Manager's numbers: resolution time, satisfaction, the on-site visit, vendor workload */}
+      <OpsPanels />
 
       <div className="panel">
         <PanelHead icon={Sparkle} title="This week, in plain words" sub="AI generated · from your own community records — verify anything operational against the ticket before acting" />

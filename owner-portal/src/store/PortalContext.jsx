@@ -196,6 +196,20 @@ export function PortalProvider({ children }) {
     return null;
   }, [reload, toast, log]);
 
+  /** make this manager the one residents of a society see and call, when several manage it */
+  const makePrimary = useCallback(async (id, associationId) => {
+    const m = VPMS.find(x => x.id === id), society = findAssoc(associationId)?.n ?? 'that society';
+    if (LIVE) {
+      try { await live.setPrimaryVpm(id, associationId); await reload(); }
+      catch (e) { toast('Couldn’t change it', e?.message ?? 'Something went wrong.', 'warning'); return; }
+    } else {
+      VPMS.forEach(v => v.societies.forEach(s => { if (s.id === associationId) s.primary = v.id === id; }));
+      setVpms([...VPMS]);
+      log(`made ${m.name} the primary property manager for ${society}`);
+    }
+    toast(`${m.name} is now shown to residents`, `Residents of ${society} see and call ${m.name.split(' ')[0]}. The other managers keep working the requests.`, 'check_mark_button');
+  }, [reload, toast, log]);
+
   /* ---- copilot ---- */
   const openCop = useCallback(() => setCop(c => ({ ...c, open: true, log: c.log.length ? c.log : [COPILOT_INTRO] })), []);
   const closeCop = useCallback(() => setCop(c => ({ ...c, open: false })), []);
@@ -222,12 +236,12 @@ export function PortalProvider({ children }) {
   const value = useMemo(() => ({
     done, feed, issues, vpms, view, patchView, ready, loadError, version, reload,
     go, doAct, chase, recordPayment, assignIssue, updateSubscription, onboardAssociation,
-    createManager, assignManager, removeManager, toast,
+    createManager, assignManager, removeManager, makePrimary, toast,
     toastMsg, modal, openModal, closeModal,
     cmdkOpen, setCmdkOpen, tip, showTip, hideTip,
     cop, openCop, closeCop, copAsk,
   }), [done, feed, issues, vpms, view, patchView, ready, loadError, version, reload, go, doAct, chase, recordPayment, assignIssue, updateSubscription, onboardAssociation,
-    createManager, assignManager, removeManager, toast, toastMsg, modal, openModal, closeModal, cmdkOpen, tip, showTip, hideTip, cop, openCop, closeCop, copAsk]);
+    createManager, assignManager, removeManager, makePrimary, toast, toastMsg, modal, openModal, closeModal, cmdkOpen, tip, showTip, hideTip, cop, openCop, closeCop, copAsk]);
 
   return <PortalCtx.Provider value={value}>{children}</PortalCtx.Provider>;
 }

@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useUI } from '@/components/Overlay';
 import { Chip } from '@/components/Sheets';
 import { Btn, Card, Header, Icon, Input, Meta, Segmented, Txt } from '@/components/ui';
-import { useT } from '@/i18n';
+import { useT, type Key } from '@/i18n';
+import { dayMonth, managerInfo, requestVisit, weekdayOf, type ManagerInfo } from '@/lib/manager';
 import { ImagePicker } from '@/lib/native';
 import { places, type Priority } from '@/store/data';
 import { CATEGORIES, checkSafety, guessCategory } from '@/store/logic';
@@ -33,6 +34,11 @@ export default function NewIssue() {
   const [photo, setPhoto] = useState<string | undefined>();
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
+  // "preferred visit": ask for the request to be looked at on the property manager's next on-site visit
+  const [visit, setVisit] = useState<ManagerInfo['next']>(null);
+  const [onVisit, setOnVisit] = useState<'any' | 'next'>('any');
+  useEffect(() => { managerInfo().then(i => setVisit(i.manager ? i.next : null)).catch(() => {}); }, []);
+  const canVisit = !!visit && pri !== 'Emergency';
 
   const category = cat ?? guessCategory(title);
   const place = about === 'common' ? asset : loc === 'other' ? other.trim() : loc;
@@ -58,6 +64,11 @@ export default function NewIssue() {
     const id = await actions.createIssueFromForm({ title: title.trim(), desc: desc.trim(), cat: category, loc: place, pri, photo, asset: about === 'common' ? asset : undefined });
     // null: the server refused or couldn't be reached — the reason is on screen, the form keeps what was typed
     if (!id) { setBusy(false); return; }
+    // the request is raised either way; adding it to the visit is a separate ask the manager still has to confirm
+    if (canVisit && onVisit === 'next') {
+      try { await requestVisit({ issueRef: id, note: '', extra: false, date: visit!.date, title: title.trim() }); toast(t('form.visitAsked'), 'calendar'); }
+      catch { toast(t('form.visitFailed'), 'alert-circle'); }
+    }
     router.replace(`/issues/${id}`);
   };
 
@@ -102,6 +113,16 @@ export default function NewIssue() {
           <Txt w={700} style={s.label}>{t('form.urgency')}</Txt>
           <Segmented items={[['Low', tx('pri', 'Low')], ['Medium', tx('pri', 'Medium')], ['High', tx('pri', 'High')], ['Emergency', tx('pri', 'Emergency')]]} value={pri} onChange={setPri} />
           {pri === 'Emergency' && <Meta style={{ color: C.bad, marginTop: 6 }}>{t('form.emergencyNote')}</Meta>}
+
+          {canVisit && <>
+            <Txt w={700} style={s.label}>{t('form.visit')}</Txt>
+            {/* chips, like the form's other choices: the visit's label is too long for half a switch on a phone */}
+            <View style={s.chips}>
+              <Chip label={t('form.visitAny')} on={onVisit === 'any'} onPress={() => setOnVisit('any')} />
+              <Chip label={t('form.visitNext', { date: `${t(('vpm.dy.' + weekdayOf(visit!.date)) as Key)} ${dayMonth(visit!.date)}` })} on={onVisit === 'next'} onPress={() => setOnVisit('next')} />
+            </View>
+            <Meta style={{ marginTop: 6 }}>{t('form.visitNote')}</Meta>
+          </>}
 
           <Txt w={700} style={s.label}>{t('form.photo')}</Txt>
           {photo ? (

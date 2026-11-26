@@ -38,12 +38,18 @@ import { residentRoutes } from './routes/resident.js';
 import { staffRoutes } from './routes/staff.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { vpmRoutes } from './routes/vpm.js';
+import { aiUsageRoutes } from './routes/aiusage.js';
+import { siteVisitRoutes } from './routes/sitevisits.js';
 import { emergencyRoutes } from './routes/emergency.js';
+import { AiLimitError, AiQuota } from './lib/quota.js';
+import { parsePrices, usageSink, withUsageContext } from './lib/usage.js';
+import { withBudget } from './lib/budget.js';
 
-export type Deps = { config: Config; db: DB; sms: SmsProvider; ai: Ai; messenger: Messenger };
+export type Deps = { config: Config; db: DB; sms: SmsProvider; ai: Ai; messenger: Messenger; quota: AiQuota };
 
-export async function buildApp(given: Omit<Deps, 'ai' | 'messenger'> & { ai?: Ai; messenger?: Messenger }) {
-  const deps: Deps = { ...given, ai: given.ai ?? noAi, messenger: given.messenger ?? messengerFrom(given.config) };
+export async function buildApp(given: Omit<Deps, 'ai' | 'messenger' | 'quota'> & { ai?: Ai; messenger?: Messenger; quota?: AiQuota }) {
+  // the AI is held to each society's monthly spending cap (lib/budget.ts)
+  const deps: Deps = { ...given, ai: withBudget(given.ai ?? noAi, given.db, parsePrices(given.config.AI_PRICES)), messenger: given.messenger ?? messengerFrom(given.config), quota: given.quota ?? AiQuota.from(given.config) };
   const app = Fastify({
     logger: deps.config.NODE_ENV === 'test' ? false : { level: 'info', redact: ['req.headers.authorization', 'req.body.code', 'req.body.password', 'req.body.refreshToken'] },
     trustProxy: true,
@@ -55,7 +61,16 @@ export async function buildApp(given: Omit<Deps, 'ai' | 'messenger'> & { ai?: Ai
   await app.register(cors, { origin: (origin, cb) => cb(null, !origin || origins.includes(origin)), credentials: false,
     // browsers ask before PUT and DELETE; without these the consoles could read but not save
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] });
-  await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
+  // counted per signed-in person, not per network address: a society office, its Wi-Fi or a mobile network often
+  // puts many people behind one address, and one busy console must not lock out the rest. Requests without a
+  // valid sign-in (signing in, OTP, the visitor check-in page) are still counted per address.
+  await app.register(rateLimit, {
+    max: 300, timeWindow: '1 minute',
+    keyGenerator: async req => {
+      if (!req.headers.authorization) return 'ip:' + req.ip;
+      try { return 'user:' + (await userIdFrom(req, deps.config.JWT_SECRET)); } catch { return 'ip:' + req.ip; }
+    },
+  });
   await app.register(multipart, { limits: { fileSize: 8 * 1024 * 1024, files: 1 } });
   // live gate updates; the sockets only ever receive a line or two from a client
   await app.register(websocket, { options: { maxPayload: 4096 } });
@@ -65,6 +80,10 @@ export async function buildApp(given: Omit<Deps, 'ai' | 'messenger'> & { ai?: Ai
   await app.register(fstatic, { root: uploadDir, prefix: '/files/', decorateReply: false });
 
   app.setErrorHandler((err, req, reply) => {
+    if (err instanceof AiLimitError) {
+      reply.header('retry-after', String(err.retryAfter));
+      return reply.status(429).send({ error: { code: err.code, message: err.message, retryAfter: err.retryAfter, scope: err.scope } });
+    }
     if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code, message: err.message } });
     const status = (err as { statusCode?: number }).statusCode;
     if (status === 429) return reply.status(429).send({ error: { code: 'rate_limited', message: 'Too many requests — try again in a minute.' } });
@@ -82,6 +101,9 @@ export async function buildApp(given: Omit<Deps, 'ai' | 'messenger'> & { ai?: Ai
   });
 
   // a society is held to its plan before any of its console's routes run
+  // each request gets its own record of whose it is, so the AI tokens it uses are counted against the right person and society
+  app.addHook('onRequest', (_req, _reply, done) => withUsageContext(() => done()));
+  deps.ai.setUsageSink?.(usageSink(deps.db));
   app.addHook('onRequest', planGuard(deps.db));
   // and each person on its team to the sections they were given
   app.addHook('onRequest', accessGuard(deps.db, deps.config.JWT_SECRET));
@@ -112,6 +134,8 @@ export async function buildApp(given: Omit<Deps, 'ai' | 'messenger'> & { ai?: Ai
   await app.register(assistantRoutes(deps), { prefix: '/v1' });
   await app.register(opsRoutes(deps), { prefix: '/v1/ops' });
   await app.register(vpmRoutes(deps), { prefix: '/v1' });
+  await app.register(siteVisitRoutes(deps), { prefix: '/v1' });
+  await app.register(aiUsageRoutes(deps), { prefix: '/v1' });
   await app.register(gateRoutes(deps), { prefix: '/v1' });
   await app.register(checkinRoutes(deps)); // the visitor's own page and its API: /visit/:token, /v1/checkin/*
   await app.register(commsRoutes(deps), { prefix: '/v1' });

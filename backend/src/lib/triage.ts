@@ -64,7 +64,9 @@ Judge only from what is written. Do not invent details.`;
 export async function vendorFor(db: Pick<DB, 'select'>, associationId: string, category: string) {
   const rows = await db.select({
     id: vendors.id, name: vendors.name, category: vendors.category,
-    openJobs: sql<number>`(select count(*)::int from issues i where i.vendor_id = ${vendors.id} and i.status not in ('Resolved','Closed'))`,
+    // written out as "vendors.id": in a one-table select Drizzle prints ${vendors.id} as a bare "id", which inside
+    // this subquery means the issue's own id — every vendor then counted 0 open jobs and the load was never balanced
+    openJobs: sql<number>`(select count(*)::int from issues i where i.vendor_id = vendors.id and i.status not in ('Resolved','Closed'))`,
   }).from(vendors).where(and(eq(vendors.associationId, associationId), eq(vendors.active, true)));
   const fit = rows.filter(v => v.category.toLowerCase() === category.toLowerCase()).sort((a, b) => a.openJobs - b.openJobs)[0];
   return fit ? { id: fit.id, name: fit.name, openJobs: fit.openJobs } : null;

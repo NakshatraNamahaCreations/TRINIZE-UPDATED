@@ -5,7 +5,7 @@ import { AsyncStorage, Localization, SecureStore } from './native';
 /** Bump when State changes shape incompatibly — older snapshots are then ignored, not half-loaded. */
 // v2: seed dates became relative to the install day — v1 snapshots are stuck in August 2026
 const V = 'trinize.v2.';
-const K = { auth: V + 'auth', lang: V + 'lang' };
+const K = { auth: V + 'auth', lang: V + 'lang', quickNav: V + 'quicknav' };
 /** each mobile number keeps its own copy, so signing out and back in brings it all back */
 const storeKey = (phone: string) => V + 'store.' + phone;
 
@@ -77,5 +77,9 @@ export const saveAuth = (a: SavedAuth) => {
   if (!SecureStore) write(K.auth, a);
 };
 export const saveLang = (l: Lang) => write(K.lang, l);
+/** where the floating quick menu was left: its side, and how far down the area it can move in (0 = top, 1 = bottom) — not pixels, so it survives a different screen or a rotation */
+export type QuickNavSpot = { side: 'left' | 'right'; down: number };
+export const loadQuickNav = () => read<QuickNavSpot>(K.quickNav);
+export const saveQuickNav = (s: QuickNavSpot) => write(K.quickNav, s);
 export const saveStore = (phone: string, s: State) => write(storeKey(phone), s);
 export const deleteStore = (phone: string) => { AsyncStorage?.removeItem(storeKey(phone)).catch(() => {}); };

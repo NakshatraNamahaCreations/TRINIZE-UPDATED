@@ -49,7 +49,7 @@ const DRAFT_SCHEMA = { type: 'object', additionalProperties: false, required: ['
  *   /v1/admin/:aid/assistant/*   ask, confirm or cancel an action, draft a message, triage a complaint
  *   /v1/admin/:aid/search · /ai-audit
  */
-export const copilotRoutes = ({ config, db, ai, messenger }: Deps): FastifyPluginAsync => async app => {
+export const copilotRoutes = ({ config, db, ai, messenger, quota }: Deps): FastifyPluginAsync => async app => {
   const uid = (req: FastifyRequest) => userIdFrom(req, config.JWT_SECRET);
   const staff = async (req: FastifyRequest, roles: StaffRole[]) => {
     const { aid } = parse(Aid, req.params);
@@ -77,6 +77,7 @@ export const copilotRoutes = ({ config, db, ai, messenger }: Deps): FastifyPlugi
   app.post('/admin/:aid/assistant/ask', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async req => {
     const { aid, s } = await staff(req, EVERYONE);
     const { text } = parse(z.object({ text: z.string().trim().min(2).max(1000) }), req.body);
+    quota.take('staff', s.userId);
     const record = async (o: { response: string; data?: string[]; action?: AiAction; status?: 'answered' | 'refused' | 'proposed'; by?: 'ai' | 'rules' }) => {
       const [row] = await db.insert(aiAudit).values({ associationId: aid, userId: s.userId, userName: s.name, role: ROLE_NAME[s.role], surface: 'console', prompt: text, response: o.response,
         dataAccessed: o.data ?? [], action: o.action ?? null, approvalRequired: !!o.action, status: o.status ?? 'answered', by: o.by ?? 'rules' }).returning({ id: aiAudit.id });
@@ -183,6 +184,7 @@ export const copilotRoutes = ({ config, db, ai, messenger }: Deps): FastifyPlugi
   app.post('/admin/:aid/assistant/draft', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async req => {
     const { aid, s } = await staff(req, ['admin', 'operator', 'committee']);
     const b = parse(z.object({ kind: z.enum(DRAFT_KINDS), details: z.string().trim().max(1500).default('') }), req.body);
+    quota.take('staff', s.userId);
     const d = await draft(aid, b.kind, b.details);
     await db.insert(aiAudit).values({ associationId: aid, userId: s.userId, userName: s.name, role: ROLE_NAME[s.role], surface: 'console', prompt: `Draft: ${b.kind}${b.details ? ' — ' + b.details : ''}`, response: d.title + ' — ' + d.body, dataAccessed: [], by: d.by });
     return d;
@@ -190,8 +192,10 @@ export const copilotRoutes = ({ config, db, ai, messenger }: Deps): FastifyPlugi
 
   /* ----- reading a complaint ----- */
   app.post('/admin/:aid/assistant/triage', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async req => {
-    const { aid } = await staff(req, ['admin', 'operator', 'committee']);
-    return triage(db, ai, aid, parse(z.object({ text: z.string().trim().min(4).max(2000) }), req.body).text);
+    const { aid, s } = await staff(req, ['admin', 'operator', 'committee']);
+    const { text } = parse(z.object({ text: z.string().trim().min(4).max(2000) }), req.body);
+    quota.take('staff', s.userId);
+    return triage(db, ai, aid, text);
   });
   /** the same reading for a complaint already on file: what the assistant would file it under and who it would send */
   app.get('/admin/:aid/issues/:ref/suggestion', async req => {

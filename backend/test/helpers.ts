@@ -7,8 +7,8 @@ import { MemoryMessenger } from '../src/lib/messenger.js';
 import { MemorySms } from '../src/lib/sms.js';
 
 /** A fresh API on an in-memory Postgres, migrated and seeded with the demo society. */
-export async function testApp(opts: { ai?: Ai } = {}) {
-  const config = loadConfig({ NODE_ENV: 'test', JWT_SECRET: 'test-secret-test-secret-test-secret-123', SMS_PROVIDER: 'memory', PAYMENTS: 'mock', UPLOAD_DIR: 'uploads-test', PUBLIC_URL: 'http://api.test' });
+export async function testApp(opts: { ai?: Ai; env?: Record<string, string> } = {}) {
+  const config = loadConfig({ NODE_ENV: 'test', JWT_SECRET: 'test-secret-test-secret-test-secret-123', SMS_PROVIDER: 'memory', PAYMENTS: 'mock', UPLOAD_DIR: 'uploads-test', PUBLIC_URL: 'http://api.test', ...opts.env });
   const h = await openDb('pglite', { migrate: true });
   const seeded = await seed(h.db);
   const { associationId } = seeded;
