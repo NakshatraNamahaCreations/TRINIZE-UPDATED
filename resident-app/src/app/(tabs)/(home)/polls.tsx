@@ -1,7 +1,8 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
-import { Card, Header, Icon, Meta, Pill, Row, Screen, stagger, Txt } from '@/components/ui';
+import { SyncNotice, useLoaded } from '@/components/SyncNotice';
+import { Card, EmptyState, Header, Icon, Meta, Pill, Row, Screen, stagger, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
 import { useFocusJump } from '@/lib/useFocusJump';
 import { pollClosed } from '@/store/data';
@@ -33,8 +34,12 @@ export default function Polls() {
   // a poll notification opens this list on its poll (?focus=P-20)
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const { scrollRef, place } = useFocusJump(focus);
+  const loaded = useLoaded('polls');
   return (
     <Screen scrollRef={scrollRef} header={<Header title={t('polls.title')} back="/" bell />}>
+      <SyncNotice part="polls" />
+      {/* was a blank screen when there were no polls */}
+      {!state.polls.length && loaded && <EmptyState icon="bar-chart-outline" title={t('polls.empty.t')} body={t('polls.empty.b')} />}
       {state.polls.map((p, idx) => {
         const total = p.opts.reduce((a, o) => a + o.v, 0);
         const voted = !!p.mine;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../app.js';
@@ -71,9 +71,11 @@ export const siteVisitRoutes = ({ config, db }: Deps): FastifyPluginAsync => asy
     const plan = await planOf(aid);
     const stored = await db.select().from(siteVisits)
       .where(and(eq(siteVisits.associationId, aid), gte(siteVisits.date, from), lt(siteVisits.date, to))).orderBy(asc(siteVisits.date));
-    const out: (Pick<Visit, 'date' | 'start' | 'end' | 'status' | 'note'> & { id: string | null })[] = stored.map(v => ({ id: v.id, date: v.date, start: v.start, end: v.end, status: v.status, note: v.note }));
+    const out: (Pick<Visit, 'date' | 'start' | 'end' | 'status' | 'note' | 'checkedInAt' | 'checkedOutAt' | 'report'> & { id: string | null })[] = stored.map(v => ({
+      id: v.id, date: v.date, start: v.start, end: v.end, status: v.status, note: v.note, checkedInAt: v.checkedInAt, checkedOutAt: v.checkedOutAt, report: v.report,
+    }));
     if (plan) for (let d = from; d < to; d = addDays(d, 1)) {
-      if (weekdayOf(d) === plan.weekday && !out.some(v => v.date === d)) out.push({ id: null, date: d, start: plan.start, end: plan.end, status: 'Planned', note: '' });
+      if (weekdayOf(d) === plan.weekday && !out.some(v => v.date === d)) out.push({ id: null, date: d, start: plan.start, end: plan.end, status: 'Planned', note: '', checkedInAt: null, checkedOutAt: null, report: '' });
     }
     return { plan, days: out.sort((a, b) => a.date.localeCompare(b.date)) };
   };
@@ -135,6 +137,7 @@ export const siteVisitRoutes = ({ config, db }: Deps): FastifyPluginAsync => asy
       const shown = on.filter(i => !isPrivate(i) || isMine(i));
       return {
         date: d.date, start: d.start, end: d.end, status: d.status, note: d.note, startsAt: instant(d.date, d.start),
+        onSite: !!d.checkedInAt && !d.checkedOutAt, report: d.checkedOutAt ? d.report : '',
         items: sortItems(shown.map(i => ({ ...i, createdAt: new Date(i.createdAt) }))).map(i => ({ id: i.id, time: i.time, title: i.title, location: i.location, kind: i.kind, status: i.status, mine: isMine(i), ref: isMine(i) ? i.issue?.ref ?? null : null })),
         others: on.length - shown.length,
       };
@@ -202,6 +205,9 @@ export const siteVisitRoutes = ({ config, db }: Deps): FastifyPluginAsync => asy
     const q = parse(z.object({ from: Day.optional(), days: z.coerce.number().int().min(1).max(62).default(14) }), req.query);
     const from = q.from ?? todayIst();
     const { plan, days: list } = await days(aid, from, q.days);
+    // a visit checked in to on an earlier day but never finished stays on the board until the manager finishes it
+    const open = await db.select().from(siteVisits).where(and(eq(siteVisits.associationId, aid), lt(siteVisits.date, from), isNotNull(siteVisits.checkedInAt), isNull(siteVisits.checkedOutAt))).orderBy(asc(siteVisits.date));
+    list.unshift(...open.map(v => ({ id: v.id, date: v.date, start: v.start, end: v.end, status: v.status, note: v.note, checkedInAt: v.checkedInAt, checkedOutAt: v.checkedOutAt, report: v.report })));
     const ids = list.map(d => d.id).filter((x): x is string => !!x);
     const items = await detail(ids.length ? await db.select().from(siteItems).where(and(inArray(siteItems.visitId, ids), inArray(siteItems.status, ['Scheduled', 'Done']))) : []);
     const waiting = await detail(await db.select().from(siteItems).where(and(eq(siteItems.associationId, aid), eq(siteItems.status, 'Requested'))).orderBy(asc(siteItems.createdAt)));
@@ -229,12 +235,49 @@ export const siteVisitRoutes = ({ config, db }: Deps): FastifyPluginAsync => asy
     return reply.status(204).send();
   });
 
+  /**
+   * The visit cycle, on the day: the manager checks in when they arrive, works through the agenda (each item marked
+   * done), and checks out with a short report of what was done. Residents with something on the visit are told, and
+   * the time between check-in and check-out counts towards the manager's hours on site.
+   */
+  app.post('/admin/:aid/site-visits/days/:date/check-in', async req => {
+    const { aid, s } = await staff(req, WRITERS);
+    const { date } = parse(Aid.extend({ date: Day }), req.params);
+    if (date !== todayIst()) throw conflict('not_today', 'You can only check in on the day of the visit.');
+    const v = await ensureVisit(aid, date);
+    if (v.status === 'Cancelled') throw cancelled();
+    if (v.checkedInAt) throw conflict('already_checked_in', 'You checked in to this visit already.');
+    const [u] = await db.update(siteVisits).set({ checkedInAt: new Date() }).where(eq(siteVisits.id, v.id)).returning();
+    await audit(db, aid, s.userId, s.name, `Checked in to the on-site visit on ${date}`);
+    return { date: u!.date, checkedInAt: u!.checkedInAt, checkedOutAt: u!.checkedOutAt, status: u!.status };
+  });
+  app.post('/admin/:aid/site-visits/days/:date/check-out', async req => {
+    const { aid, s } = await staff(req, WRITERS);
+    const { date } = parse(Aid.extend({ date: Day }), req.params);
+    const { report } = parse(z.object({ report: z.string().trim().min(10, 'Write a line or two on what was done — residents see it.').max(3000) }), req.body);
+    const [v] = await db.select().from(siteVisits).where(and(eq(siteVisits.associationId, aid), eq(siteVisits.date, date)));
+    if (!v?.checkedInAt) throw conflict('not_checked_in', 'Check in to the visit first.');
+    if (v.checkedOutAt) throw conflict('already_checked_out', 'This visit is finished already.');
+    const [u] = await db.update(siteVisits).set({ checkedOutAt: new Date(), report, status: 'Done' }).where(eq(siteVisits.id, v.id)).returning();
+    // what was planned and not done goes back to the list of requests, so it isn't lost
+    const left = await db.update(siteItems).set({ visitId: null, time: null, status: 'Requested' })
+      .where(and(eq(siteItems.visitId, v.id), eq(siteItems.kind, 'Request'), eq(siteItems.status, 'Scheduled'))).returning({ by: siteItems.requestedBy });
+    const asked = await db.selectDistinct({ id: siteItems.requestedBy }).from(siteItems).where(eq(siteItems.visitId, v.id));
+    const who = [...new Set([...asked, ...left].map(x => ('id' in x ? x.id : x.by)).filter((x): x is string => !!x))];
+    await notify(db, who, { kind: 'issues', title: `The property manager’s visit report for ${date}`, body: report.slice(0, 140), href: '/visits' });
+    await audit(db, aid, s.userId, s.name, `Finished the on-site visit on ${date} (${Math.round((u!.checkedOutAt!.getTime() - u!.checkedInAt!.getTime()) / 60_000)} min on site)`);
+    return { date: u!.date, checkedInAt: u!.checkedInAt, checkedOutAt: u!.checkedOutAt, status: u!.status, report: u!.report, returned: left.length };
+  });
+
   /** add a visit day, change its hours, cancel it or mark it done */
   app.put('/admin/:aid/site-visits/days/:date', async req => {
     const { aid, s } = await staff(req, WRITERS);
     const { date } = parse(Aid.extend({ date: Day }), req.params);
     const b = parse(z.object({ start: Time.optional(), end: Time.optional(), status: z.enum(['Planned', 'Done', 'Cancelled']).optional(), note: z.string().trim().max(300).optional() }), req.body);
     const v = await ensureVisit(aid, date, b);
+    // a visit the manager checked in to runs through check-out; one with a report is final
+    if (v.checkedOutAt && b.status && b.status !== v.status) throw conflict('visit_finished', 'This visit is finished and its report sent — it can’t be changed.');
+    if (v.checkedInAt && !v.checkedOutAt && b.status && b.status !== v.status) throw conflict('visit_in_progress', 'The manager is on site — finish the visit with a report instead.');
     const start = b.start ?? v.start, end = b.end ?? v.end;
     if (start >= end) throw badRequest('bad_hours', 'The visit has to end after it starts.');
     const [u] = await db.update(siteVisits).set({ start, end, ...(b.status ? { status: b.status } : {}), ...(b.note !== undefined ? { note: b.note } : {}) }).where(eq(siteVisits.id, v.id)).returning();

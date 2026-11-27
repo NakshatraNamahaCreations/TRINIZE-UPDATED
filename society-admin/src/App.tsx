@@ -12,6 +12,7 @@ import { Accounts } from './pages/Accounts';
 import { Assistant } from './pages/Assistant';
 import { Inspections } from './pages/Inspections';
 import { Visits } from './pages/Visits';
+import { NotFound } from './pages/NotFound';
 import { Announcements } from './pages/Announcements';
 import { AuditLog } from './pages/AuditLog';
 import { Dashboard } from './pages/Dashboard';
@@ -101,7 +102,7 @@ export default function App() {
                   <Route path="ai-usage" element={<AiUsage />} />
                   <Route path="audit" element={<AuditLog />} />
                   <Route path="support" element={<Support />} />
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="*" element={<NotFound />} />
                 </Route>
               </Route>
             </Routes>

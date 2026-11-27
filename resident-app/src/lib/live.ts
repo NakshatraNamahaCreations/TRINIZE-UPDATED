@@ -12,7 +12,7 @@ const time = (d: Date) => `${d.getHours() % 12 || 12}:${String(d.getMinutes()).p
 const dm = (d: Date) => `${d.getDate()} ${MON[d.getMonth()]}`;
 const stamp = (iso: string) => { const d = new Date(iso); return `${dm(d)}, ${time(d)}`; };
 /** "Just now", "2h ago", "Yesterday", "3 days ago", then the date */
-function ago(iso: string) {
+export function ago(iso: string) {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 2) return 'Just now';
   if (mins < 60) return mins + 'm ago';
@@ -33,12 +33,12 @@ function toIssue(i: ApiIssue): Issue {
   const due = new Date(i.slaDueAt);
   return {
     id: i.ref, title: i.title, cat: i.category, loc: i.location, pri: i.priority, by: i.reporter ?? '—', unit: i.unit ?? '—', mine: i.mine ?? true,
-    when: ago(i.createdAt), status: i.status, vendor: i.vendor ?? '—',
+    when: ago(i.createdAt), at: i.createdAt, status: i.status, vendor: i.vendor ?? '—',
     sla: i.slaState === 'met' ? 'Resolved' : i.slaState === 'over' ? 'Past the response time' : `Response due ${dm(due)}, ${time(due)}`,
     slaState: i.slaState,
-    tl: i.timeline.map(e => ({ s: e.status, w: stamp(e.at), n: e.note ?? undefined })),
+    tl: (i.timeline ?? []).map(e => ({ s: e.status, w: stamp(e.at), n: e.note ?? undefined })),
     internal: [],
-    updates: i.updates.map(u => ({ text: u.text, when: ago(u.at), photo: u.photoUrl ?? undefined })),
+    updates: (i.updates ?? []).map(u => ({ text: u.text, when: ago(u.at), photo: u.photoUrl ?? undefined })),
   };
 }
 
@@ -122,10 +122,10 @@ const optionIds = new Map<string, string[]>();
 export async function fetchPolls(): Promise<Poll[]> {
   const list = await api<ApiPoll[]>('GET', '/v1/polls');
   return list.map(p => {
-    optionIds.set(p.id, p.options.map(o => o.id));
+    optionIds.set(p.id, (p.options ?? []).map(o => o.id));
     return {
-      id: p.id, q: p.question, opts: p.options.map(o => ({ t: o.label, v: o.votes })),
-      mine: p.options.find(o => o.id === p.myOptionId)?.label ?? null,
+      id: p.id, q: p.question, opts: (p.options ?? []).map(o => ({ t: o.label, v: o.votes })),
+      mine: (p.options ?? []).find(o => o.id === p.myOptionId)?.label ?? null,
       closes: (p.closed ? 'Closed ' : 'Closes ') + dm(new Date(p.closesAt)),
       elig: p.eligibility === 'owners' ? 'Owners only · one vote per unit' : 'All residents · one vote per unit',
       closed: p.closed, closesAt: localIso(new Date(p.closesAt)),
@@ -137,6 +137,8 @@ export const voteLive = (pollId: string, index: number) => api('POST', `/v1/poll
 /* ---------- assistant ---------- */
 export type AssistantReply = {
   text: string; source: string | null; chips?: string[]; calls?: [string, string][]; link?: { label: string; href: string }; offer?: 'ask_office';
+  /** an emergency: the SOS button comes first */
+  sos?: boolean;
   /** the server's safety check found it rude: not answered, not kept — hand it back to be rephrased */
   flagged?: { level: 'warn' | 'block'; words: string[] };
 };

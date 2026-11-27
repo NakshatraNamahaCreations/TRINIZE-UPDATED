@@ -58,7 +58,19 @@ function refresh() {
   return refreshing;
 }
 
-export async function api(method, path, body, opts = {}) {
+/** reads already on their way: a second identical read at the same moment waits for the first instead of asking again */
+const inflight = new Map();
+export function api(method, path, body, opts = {}) {
+  if (method !== 'GET' || body !== undefined) return send(method, path, body, opts);
+  const key = (opts.auth ?? true ? 'a' : 'n') + path;
+  const going = inflight.get(key);
+  if (going) return going;
+  const p = send(method, path, body, opts).finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+async function send(method, path, body, opts = {}) {
   const auth = opts.auth ?? true;
   let res;
   try {

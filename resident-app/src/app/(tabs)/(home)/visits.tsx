@@ -28,7 +28,9 @@ export default function Visits() {
   const [busy, setBusy] = useState(false);
 
   const fail = useCallback((e: unknown) => toast(e instanceof ApiError ? e.message : t('live.failed'), 'alert-circle'), [toast, t]);
-  const load = useCallback(() => managerInfo().then(setInfo).catch(fail), [fail]);
+  // a failed load is said on the screen with Retry — never a blank page
+  const [loadErr, setLoadErr] = useState('');
+  const load = useCallback(() => managerInfo().then(i => { setLoadErr(''); setInfo(i); }).catch(e => setLoadErr(e instanceof ApiError && e.status !== 0 ? e.message : t('live.offline'))), [t]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const dayName = (d: string) => t(('vpm.day.' + weekdayOf(d)) as Key);
@@ -54,6 +56,9 @@ export default function Visits() {
     try { await withdrawRequest(r.id); toast(t('vpm.withdrawn'), 'checkmark'); await load(); } catch (e) { fail(e); }
   };
 
+  if (!info && loadErr) {
+    return <Screen header={<Header back="/" title={t('vpm.title')} />}><EmptyState icon="cloud-offline-outline" title={t('live.failedList', { what: t('vpm.title') })} body={loadErr} action={t('live.retry')} onAction={() => { void load(); }} /></Screen>;
+  }
   if (info && !info.manager) {
     return <Screen header={<Header back="/" title={t('vpm.title')} />}><EmptyState icon="person-outline" title={t('vpm.none')} body={t('vpm.noneB')} /></Screen>;
   }
@@ -99,8 +104,15 @@ export default function Visits() {
                 <Pill tone={day.status === 'Cancelled' ? 'bad' : day.status === 'Done' ? 'good' : 'acc'}>
                   {day.status === 'Cancelled' ? t('vpm.cancelled') : day.status === 'Done' ? t('vpm.done') : hours(day.start, day.end)}
                 </Pill>
+                {day.onSite && <Pill tone="good">{t('vpm.onSiteNow')}</Pill>}
               </Row>
               {!!day.note && <Meta style={{ marginTop: 8 }}>{day.note}</Meta>}
+              {!!day.report && (
+                <View style={s.report}>
+                  <Txt w={800} style={{ fontSize: 13 }}>{t('vpm.report')}</Txt>
+                  <Txt style={{ fontSize: 13, lineHeight: 19, color: C.ink2, marginTop: 4 }}>{day.report}</Txt>
+                </View>
+              )}
               {!day.items.length && !day.others && <Meta style={{ marginTop: 10 }}>{t('vpm.nothing')}</Meta>}
               {day.items.map((i, idx) => (
                 <View key={i.id} style={[s.item, idx > 0 && s.itemLine]}>
@@ -168,6 +180,7 @@ export default function Visits() {
 }
 
 const s = StyleSheet.create({
+  report: { marginTop: 10, padding: 12, borderRadius: 12, backgroundColor: C.goodBg },
   plan: { marginHorizontal: 14, marginTop: 12, borderRadius: 18, padding: 16 },
   strip: { gap: 8, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 2 },
   day: { width: 58, paddingVertical: 9, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: C.line, alignItems: 'center', gap: 1 },

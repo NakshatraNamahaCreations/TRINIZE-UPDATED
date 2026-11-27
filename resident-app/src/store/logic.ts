@@ -221,10 +221,10 @@ export const CHIP_SKIP_PHOTO = 'Skip photo';
 export const CHIP_FORM = 'Use a form instead';
 
 /** tappable numbers under the emergency answer */
-export const EMERGENCY_CALLS: [string, string][] = [['Security (24×7)', '+918041287001'], ['Ambulance 108', '108'], ['Fire 101', '101']];
+export const EMERGENCY_CALLS: [string, string][] = [['Security (24×7)', '+918041287001'], ['Ambulance 108', '108'], ['Fire 101', '101'], ['National emergency · 112', '112']];
 
-function aiSay(d: Draft<State>, text: string, src: string | null, chips?: string[], calls?: [string, string][]) {
-  d.chat.log.push({ who: 'ai', text, src, chips, calls });
+function aiSay(d: Draft<State>, text: string, src: string | null, chips?: string[], calls?: [string, string][], sos?: boolean) {
+  d.chat.log.push({ who: 'ai', text, src, chips, calls, sos });
 }
 
 export const CATEGORIES = ['Electrical', 'Plumbing', 'Lifts', 'Sanitation', 'HVAC', 'General maintenance'];
@@ -303,9 +303,13 @@ export function aiReply(d: Draft<State>, text: string) {
   }
 
   const t = understand(text);
-  if (/\b(fire|smoke|gas leak|accident|injured|injury|bleeding|unconscious|emergency|ambulance|intruder|burglar|theft|robbery|108|101)\b/.test(t)) {
-    aiSay(d, 'If this is a medical, fire or security emergency, call now — tap a number below.\n\nI have not contacted any emergency service, and I am not able to. Once everyone is safe, I can log an issue for the committee.',
-      'Community Handbook v3 · §12 Emergency procedure', ['Open the Directory', 'Report an issue', 'Start over'], EMERGENCY_CALLS);
+  // the same rules as the server (backend lib/assistant.ts): someone stuck in a lift, and numbers only when asked to call them
+  const LIFT = /\b(lift|elevator)s?\b|लिफ्ट|ಲಿಫ್ಟ್/, STUCK = /\b(stuck|trapped|phas|phasa|phasi|phans|phansa|phanse|phansi|fasa|fasi|atak|atka|atke|atki)\b|फंस|फँस|अटक|ಸಿಕ್ಕಿ|ಸಿಲುಕಿ/;
+  const liftTrap = t.split(/[.?!\n]/).some(x => LIFT.test(x) && STUCK.test(x));
+  if (/\b(fire|smoke|gas leak|accident|injured|injury|bleeding|unconscious|emergency|ambulance|intruder|burglar|theft|robbery|trapped)\b/.test(t)
+    || /\b(call|dial|ring|phone)\s+(1(01|08|12))\b/.test(t) || liftTrap) {
+    aiSay(d, 'Press SOS to alert the security team right now — they see it at the gate at once. If someone is hurt, in danger or stuck in a lift, also call a number below.\n\nI have not contacted any emergency service myself. Once everyone is safe, I can log an issue for the committee.',
+      'Community Handbook v3 · §12 Emergency procedure', ['Open the Directory', 'Report an issue', 'Start over'], EMERGENCY_CALLS, true);
     return;
   }
 

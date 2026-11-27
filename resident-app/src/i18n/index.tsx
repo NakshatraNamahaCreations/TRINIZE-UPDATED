@@ -36,7 +36,12 @@ export function LangProvider({ initial = 'en', children }: { initial?: Lang; chi
   useEffect(() => { saveLang(lang); }, [lang]);
   const dict = DICTS[lang];
 
-  const t = useCallback((key: Key, vars?: Vars) => fill(dict[key] ?? en[key], vars), [dict]);
+  // a count of 1 uses the string's singular form when it has one ("1 parcel", not "1 parcel(s)")
+  const t = useCallback((key: Key, vars?: Vars) => {
+    const one = (key + '.one') as Key;
+    const k = vars?.n === 1 && one in en ? one : key;
+    return fill(dict[k] ?? en[k], vars);
+  }, [dict]);
   const tr = useCallback((key: Key, parts: Record<string, ReactNode>) =>
     (dict[key] ?? en[key]).split(/\{(\w+)\}/).map((seg, i) => <Fragment key={i}>{i % 2 ? parts[seg] : seg}</Fragment>), [dict]);
   const tx = useCallback((prefix: string, value: string) => {

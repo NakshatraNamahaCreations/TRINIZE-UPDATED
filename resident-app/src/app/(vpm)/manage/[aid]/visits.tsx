@@ -9,10 +9,15 @@ import { useT, type Key } from '@/i18n';
 import { ApiError } from '@/lib/api';
 import { addDays, clock, dayMonth, hours, weekdayOf } from '@/lib/manager';
 import { useFocusEffect } from '@/lib/refresh';
-import { addSiteItem, removeSiteItem, savePlan, setDay, siteBoard, updateSiteItem, type SiteBoard, type SiteDay, type SiteItem } from '@/lib/vpm';
+import { TimePicker } from '@/components/TimePicker';
+import { addSiteItem, checkIn, checkOut, removeSiteItem, savePlan, setDay, siteBoard, updateSiteItem, type SiteBoard, type SiteDay, type SiteItem } from '@/lib/vpm';
 import { C } from '@/theme';
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** '9:05 AM' for an instant, in India time (the visit board's clock) */
+const clockOf = (iso: string) => { const d = new Date(Date.parse(iso) + 330 * 60_000); const h = d.getUTCHours(); return `${h % 12 || 12}:${String(d.getUTCMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+/** '2h 45m' between two instants */
+const span = (a: string, b: string) => { const m = Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 60000)); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
 const KINDS = ['Inspection', 'Meeting', 'Follow-up'] as const;
 type Kind = (typeof KINDS)[number];
 
@@ -40,6 +45,8 @@ export default function VpmVisits() {
   const [title, setTitle] = useState('');
   const [where, setWhere] = useState('');
   const [kind, setKind] = useState<Kind>('Inspection');
+  // leaving the visit: what was done, for residents and the office
+  const [report, setReport] = useState('');
 
   const fail = useCallback((e: unknown) => toast(e instanceof ApiError ? e.message : t('live.failed'), 'alert-circle'), [toast, t]);
   const load = useCallback(async () => {
@@ -102,8 +109,12 @@ export default function VpmVisits() {
           {!board?.plan && <Meta style={{ marginBottom: 6 }}>{t('mgr.v.planNone')}</Meta>}
           <Chips items={[0, 1, 2, 3, 4, 5, 6].map(d => [String(d), t(('vpm.dy.' + d) as Key)] as const)} value={wd} onChange={setWd} />
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ flex: 1 }}><Label>{t('mgr.v.from')}</Label><Input value={start} onChangeText={setStart} placeholder="09:00" maxLength={5} keyboardType="numbers-and-punctuation" /></View>
-            <View style={{ flex: 1 }}><Label>{t('mgr.v.to')}</Label><Input value={end} onChangeText={setEnd} placeholder="12:00" maxLength={5} keyboardType="numbers-and-punctuation" /></View>
+            <View style={{ flex: 1 }}>
+              <Label>{t('mgr.v.fromT')}</Label>
+              <TimePicker value={start} onChange={setStart} />
+              <Label>{t('mgr.v.toT')}</Label>
+              <TimePicker value={end} onChange={setEnd} />
+            </View>
           </View>
           <Btn full icon="save-outline" label={t('mgr.v.savePlan')} disabled={busy || wd === null} onPress={plan} style={{ marginTop: 12 }} />
         </Card>
@@ -124,7 +135,7 @@ export default function VpmVisits() {
                 <Label>{t('mgr.v.pickDay')}</Label>
                 <Chips items={offered(r).map(d => [d, label(d)] as const)} value={when} onChange={setWhen} />
                 <Label>{t('mgr.v.time')}</Label>
-                <Input value={time} onChangeText={setTime} placeholder="10:15" maxLength={5} keyboardType="numbers-and-punctuation" />
+                <TimePicker value={time} onChange={setTime} step={15} optional noneLabel={t('mgr.v.anyTime')} />
                 <Label>{t('mgr.v.reply')}</Label>
                 <Input value={reply} onChangeText={setReply} maxLength={300} placeholder="" />
                 <View style={s.two}>
@@ -172,18 +183,39 @@ export default function VpmVisits() {
                   <Label>{t('mgr.v.kind')}</Label>
                   <Chips items={KINDS.map(k => [k, tx('vpm.kind', k)] as const)} value={kind} onChange={setKind} />
                   <Label>{t('mgr.v.time')}</Label>
-                  <Input value={time} onChangeText={setTime} placeholder="09:30" maxLength={5} keyboardType="numbers-and-punctuation" />
+                  <TimePicker value={time} onChange={setTime} from={d.start} to={d.end} step={15} optional noneLabel={t('mgr.v.anyTime')} />
                   <Btn full icon="add" label={t('mgr.v.add')} disabled={busy} onPress={() => add(d)} style={{ marginTop: 12 }} />
                   <Btn full variant="ghost" label={t('common.cancel')} onPress={() => setAdding(null)} style={{ marginTop: 8 }} />
                 </>
               ) : (
-                <View style={s.dayActs}>
-                  {d.status === 'Planned' && <Btn variant="soft" icon="add" label={t('mgr.v.add')} onPress={() => { setAdding(d.date); setTitle(''); setWhere(''); setTime(''); }} />}
-                  {d.status === 'Planned' && d.date <= today && <Btn variant="ghost" icon="checkmark-done" label={t('mgr.v.dayDone')} disabled={busy} onPress={() => void run(() => setDay(aid, d.date, { status: 'Done' }))} />}
-                  {d.status === 'Planned'
-                    ? <Btn variant="danger" label={t('mgr.v.cancelDay')} disabled={busy} onPress={() => void run(() => setDay(aid, d.date, { status: 'Cancelled' }), t('mgr.v.cancelled'))} />
-                    : <Btn variant="ghost" label={t('mgr.v.restoreDay')} disabled={busy} onPress={() => void run(() => setDay(aid, d.date, { status: 'Planned', note: '' }))} />}
-                </View>
+                <>
+                  {/* the visit cycle: check in on the day → work through the agenda above → finish with a report */}
+                  {d.status === 'Planned' && d.date === today && !d.checkedInAt && (
+                    <Btn full icon="location" label={t('mgr.v.checkIn')} disabled={busy} onPress={() => void run(() => checkIn(aid, d.date), t('mgr.v.checkedIn'))} style={{ marginTop: 12 }} />
+                  )}
+                  {!!d.checkedInAt && !d.checkedOutAt && (
+                    <View style={s.onSite}>
+                      <Txt w={800} style={{ fontSize: 13.5, color: C.good }}>{t('mgr.v.onSiteSince', { time: clockOf(d.checkedInAt) })}</Txt>
+                      <Meta style={{ marginTop: 2 }}>{t('mgr.v.onSiteHint')}</Meta>
+                      <Label>{t('mgr.v.report')}</Label>
+                      <Input value={report} onChangeText={setReport} placeholder={t('mgr.v.reportPh')} multiline maxLength={3000} style={{ minHeight: 90, textAlignVertical: 'top' }} />
+                      <Btn full icon="flag" label={t('mgr.v.finish')} disabled={busy || report.trim().length < 10} onPress={() => void run(async () => { const r = await checkOut(aid, d.date, report.trim()); setReport(''); if (r.returned) toast(t('mgr.v.returned', { n: r.returned }), 'information-circle'); }, t('mgr.v.finished'))} style={{ marginTop: 10 }} />
+                    </View>
+                  )}
+                  {!!d.checkedOutAt && (
+                    <View style={s.onSite}>
+                      <Txt w={800} style={{ fontSize: 13.5 }}>{t('mgr.v.onSiteFor', { from: clockOf(d.checkedInAt!), to: clockOf(d.checkedOutAt), dur: span(d.checkedInAt!, d.checkedOutAt) })}</Txt>
+                      {!!d.report && <Txt style={{ fontSize: 13, lineHeight: 19, color: C.ink2, marginTop: 4 }}>{d.report}</Txt>}
+                    </View>
+                  )}
+                  <View style={s.dayActs}>
+                    {d.status === 'Planned' && <Btn variant="soft" icon="add" label={t('mgr.v.add')} onPress={() => { setAdding(d.date); setTitle(''); setWhere(''); setTime(''); }} />}
+                    {/* a past visit nobody checked in to can still be closed */}
+                    {d.status === 'Planned' && d.date < today && !d.checkedInAt && <Btn variant="ghost" icon="checkmark-done" label={t('mgr.v.dayDone')} disabled={busy} onPress={() => void run(() => setDay(aid, d.date, { status: 'Done' }))} />}
+                    {d.status === 'Planned' && !d.checkedInAt && <Btn variant="danger" label={t('mgr.v.cancelDay')} disabled={busy} onPress={() => void run(() => setDay(aid, d.date, { status: 'Cancelled' }), t('mgr.v.cancelled'))} />}
+                    {d.status !== 'Planned' && !d.checkedOutAt && <Btn variant="ghost" label={t('mgr.v.restoreDay')} disabled={busy} onPress={() => void run(() => setDay(aid, d.date, { status: 'Planned', note: '' }))} />}
+                  </View>
+                </>
               )}
             </Card>
           </View>
@@ -203,4 +235,5 @@ const s = StyleSheet.create({
   miniBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 28 },
   miniT: { fontSize: 12, color: C.acc },
   dayActs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  onSite: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: C.bg, borderWidth: 1, borderColor: C.line },
 });

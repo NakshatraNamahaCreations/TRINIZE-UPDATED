@@ -11,6 +11,10 @@ type Draft = { time: string; title: string; location: string; kind: (typeof KIND
 const blank: Draft = { time: '', title: '', location: '', kind: 'Inspection' };
 const addDays = (d: string, n: number) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
 const small = { fontSize: 12, color: 'var(--ink3)' } as const;
+/** '9:05 AM' for an instant, in India time */
+const at = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+/** '2h 45m' between two instants */
+const span = (a: string, b: string) => { const m = Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 60000)); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
 
 /**
  * Visits & planning: the Virtual Property Manager's weekly on-site visit. The regular slot, residents' requests
@@ -154,11 +158,18 @@ export function Visits() {
             right={<div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <Pill tone={d.status === 'Cancelled' ? 'bad' : d.status === 'Done' ? 'good' : 'acc'}>{d.status}</Pill>
               {d.status === 'Planned' && <button className="a-btn soft xs" onClick={() => { setAdding(d.date); setDraft(blank); }}><Plus size={13} />Add</button>}
-              {d.status === 'Planned' && d.date <= today && <button className="a-btn ghost xs" disabled={busy} onClick={() => void run(() => setDay(d.date, { status: 'Done' }), 'Visit marked complete')}><CheckCircle size={13} />Complete</button>}
-              {d.status === 'Planned'
-                ? <button className="a-btn ghost xs" disabled={busy} onClick={() => cancelDay(d)}><CalendarX size={13} />Cancel</button>
-                : <button className="a-btn ghost xs" disabled={busy} onClick={() => void run(() => setDay(d.date, { status: 'Planned', note: '' }), 'Visit restored')}><ArrowCounterClockwise size={13} />Restore</button>}
+              {d.status === 'Planned' && d.date <= today && !d.checkedInAt && <button className="a-btn ghost xs" disabled={busy} onClick={() => void run(() => setDay(d.date, { status: 'Done' }), 'Visit marked complete')}><CheckCircle size={13} />Complete</button>}
+              {d.status === 'Planned' && !d.checkedInAt && <button className="a-btn ghost xs" disabled={busy} onClick={() => cancelDay(d)}><CalendarX size={13} />Cancel</button>}
+              {d.status !== 'Planned' && !d.checkedOutAt && <button className="a-btn ghost xs" disabled={busy} onClick={() => void run(() => setDay(d.date, { status: 'Planned', note: '' }), 'Visit restored')}><ArrowCounterClockwise size={13} />Restore</button>}
             </div>} />
+          {!!d.checkedInAt && (
+            <div style={{ margin: '0 0 12px', padding: '10px 12px', borderRadius: 10, background: d.checkedOutAt ? 'var(--panel2)' : 'var(--good-bg)', border: '1px solid var(--line)' }}>
+              <b style={{ fontSize: 13 }}>{d.checkedOutAt
+                ? `On site ${at(d.checkedInAt)} – ${at(d.checkedOutAt)} · ${span(d.checkedInAt, d.checkedOutAt)}`
+                : `The manager is on site — checked in at ${at(d.checkedInAt)}`}</b>
+              {!!d.report && <div style={{ fontSize: 13, color: 'var(--ink2)', marginTop: 4, whiteSpace: 'pre-wrap' }}>{d.report}</div>}
+            </div>
+          )}
           {adding === d.date && (
             <form className="form-grid" onSubmit={submitItem(d)} style={{ marginBottom: 14 }}>
               <label>Time (optional)<input className="a-in" type="time" value={draft.time} min={d.start} max={d.end} onChange={e => setDraft({ ...draft, time: e.target.value })} /></label>

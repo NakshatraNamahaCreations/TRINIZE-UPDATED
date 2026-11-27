@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { NotFound } from './pages/NotFound';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router';
 import { CommandPalette } from './components/CommandPalette';
 import { Copilot } from './components/Copilot';
@@ -7,7 +8,6 @@ import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { Association360 } from './pages/Association360';
 import { Associations } from './pages/Associations';
-import { Changed } from './pages/Changed';
 import { Collections } from './pages/Collections';
 import { CommandCentre } from './pages/CommandCentre';
 import { Issues } from './pages/Issues';
@@ -106,8 +106,7 @@ export default function App() {
                 <Route path="modules" element={<Modules />} />
                 {LIVE && <Route path="team" element={<Team />} />}
                 {LIVE && <Route path="ai-usage" element={<AiUsage />} />}
-                <Route path="changed" element={<Changed />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<NotFound />} />
               </Route>
             </Route>
           </Routes>

@@ -24,14 +24,14 @@ export function Sidebar({ collapsed, onToggle, open, onClose }) {
   } : null;
   const cnt = i => (counts ? counts[i.k] : i.cnt);
   // connected, this is the working console: the pages that explain the concept stay with the demo
-  const items = LIVE ? NAV.filter(i => i.grp !== 'About this concept' && i.k !== 'changed') : NAV.filter(i => !i.live);
+  const items = LIVE ? NAV : NAV.filter(i => !i.live);
   return (
     <>
       <div className={'veil side-veil' + (open ? ' show' : '')} onClick={onClose} />
       <aside className={'side' + (open ? ' open' : '')} aria-label="Main navigation">
         <div className="brand">
           <div className="t">T</div>
-          <div className="brand-txt"><b>Trinize</b><span>Owner portal</span></div>
+          <div className="brand-txt"><b>Trinize</b><span>Operator console</span></div>
         </div>
         <nav className="side-nav">
           {items.map(i => i.grp

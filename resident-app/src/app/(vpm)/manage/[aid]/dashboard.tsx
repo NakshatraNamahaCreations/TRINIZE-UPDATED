@@ -96,7 +96,7 @@ export default function VpmDashboard() {
   const summarise = () => ask('sum', async () => { const r = await askAssistant(aid, 'Which complaints are pending?'); return { kind: 'answer', text: r.text, cards: r.cards }; });
   const priorities = () => ask('pri', async () => { const r = await askAssistant(aid, 'Which work order is overdue?'); return { kind: 'answer', text: r.text, cards: r.cards }; });
   const draft = () => ask('draft', async () => { const r = await draftNotice(aid, ''); return { kind: 'draft', ...r }; });
-  const postDraft = (d: { title: string; body: string }) => router.push({ pathname: '/manage/[aid]', params: { aid, name: name ?? '', tab: 'notice', title: d.title, body: d.body } });
+  const postDraft = (d: { title: string; body: string }) => router.push({ pathname: '/manage/[aid]/notice', params: { aid, name: name ?? '', title: d.title, body: d.body } });
 
   /* ---------- quick actions ---------- */
   const exportReport = async () => {
@@ -166,7 +166,7 @@ export default function VpmDashboard() {
     { label: t('dash.sat'), value: sat?.avg != null ? `${sat.avg} / 5` : '—', sub: sat?.count ? t('dash.ratings', { n: sat.count }) : t('dash.noRatings'), icon: 'star', fg: '#B54708', bg: C.warnBg },
   ] : [];
   const quick: { icon: IconName; label: string; onPress: () => void }[] = [
-    { icon: 'megaphone-outline', label: t('dash.qNotice'), onPress: () => router.push({ pathname: '/manage/[aid]', params: { aid, name: name ?? '', tab: 'notice' } }) },
+    { icon: 'megaphone-outline', label: t('dash.qNotice'), onPress: () => router.push({ pathname: '/manage/[aid]/notice', params: { aid, name: name ?? '' } }) },
     { icon: 'radio-outline', label: t('dash.qBroadcast'), onPress: () => { setCastForm(v => !v); setVendorForm(false); } },
     { icon: 'download-outline', label: t('dash.qExport'), onPress: () => void exportReport() },
     { icon: 'person-add-outline', label: t('dash.qVendor'), onPress: () => { setVendorForm(v => !v); setCastForm(false); } },

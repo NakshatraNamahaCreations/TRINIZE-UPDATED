@@ -96,7 +96,7 @@ export function Login() {
         <div className="ab-glow g1" /><div className="ab-glow g2" />
         <div className="ab-top">
           <div className="logo-t">T</div>
-          <div><b>Trinize</b><span>Owner portal</span></div>
+          <div><b>Trinize</b><span>Operator console</span></div>
         </div>
         <div className="ab-mid">
           <span className="ab-eyebrow">For platform operators</span>

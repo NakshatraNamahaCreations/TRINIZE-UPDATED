@@ -8,6 +8,8 @@ export type Society = {
   id: string; name: string; short: string; city: string; open: number; fresh: number; emergencies: number; overdue: number;
   /** estimates waiting for a yes, requests resolved in the last 7 days, and the size of the place */
   approvals: number; resolvedWeek: number; homes: number; residents: number;
+  /** requests that need the manager, each counted once — the same rule as the attention list */
+  needs?: number;
   /** residents' unread messages, and requests for the on-site visit waiting for an answer */
   unread?: number; visitRequests?: number;
 };
@@ -29,7 +31,8 @@ export type Vendor = { id: string; name: string; category: string; phone: string
 export type Message = { id: string; from: 'resident' | 'staff' | 'vendor'; by: string | null; text: string; at: string };
 export type Invoice = { id: string; issue: string; vendor: string; amount: number; note: string; status: 'Pending' | 'Approved' | 'Paid' | 'Rejected' };
 
-export const vpmMe = () => api<{ user: { name: string }; societies: Society[]; attention: Attention[] }>('GET', '/v1/vpm/me');
+/** `week`: hours on site this week across all societies (null before the visit tables exist); `band`: the weekly target */
+export const vpmMe = () => api<{ user: { name: string }; societies: Society[]; attention: Attention[]; week?: { hours: number; visits: number } | null; band?: { min: number; max: number } }>('GET', '/v1/vpm/me');
 const A = (aid: string) => `/v1/admin/${aid}`;
 
 export const tickets = (aid: string) => api<Ticket[]>('GET', `${A(aid)}/issues`);
@@ -69,7 +72,11 @@ export type SiteItem = {
   id: string; date: string | null; time: string | null; title: string; location: string; kind: SiteKind; status: 'Requested' | 'Scheduled' | 'Done' | 'Declined';
   extra: boolean; note: string; reply: string; ref: string | null; issueStatus: Status | null; resident: { name: string; unit: string | null } | null; createdAt: string;
 };
-export type SiteDay = { id: string | null; date: string; start: string; end: string; status: 'Planned' | 'Done' | 'Cancelled'; note: string; startsAt: string; items: SiteItem[] };
+export type SiteDay = {
+  id: string | null; date: string; start: string; end: string; status: 'Planned' | 'Done' | 'Cancelled'; note: string; startsAt: string; items: SiteItem[];
+  /** the visit cycle: when the manager arrived and left, and what they reported */
+  checkedInAt?: string | null; checkedOutAt?: string | null; report?: string;
+};
 export type SitePlan = { weekday: number; start: string; end: string };
 export type SiteBoard = { plan: SitePlan | null; today: string; days: SiteDay[]; requests: SiteItem[] };
 
@@ -80,6 +87,9 @@ export const setDay = (aid: string, date: string, o: { status?: 'Planned' | 'Don
 export const addSiteItem = (aid: string, o: { date: string; time?: string; title: string; location?: string; kind: Exclude<SiteKind, 'Request'> }) => api<SiteItem>('POST', `${SV(aid)}/items`, o);
 export const updateSiteItem = (aid: string, id: string, o: { status?: 'Scheduled' | 'Done' | 'Declined'; date?: string; time?: string | null; reply?: string }) => api<SiteItem>('PUT', `${SV(aid)}/items/${id}`, o);
 export const removeSiteItem = (aid: string, id: string) => api('DELETE', `${SV(aid)}/items/${id}`);
+/** arrive on site (only on the day), and leave with a report residents see */
+export const checkIn = (aid: string, date: string) => api('POST', `${SV(aid)}/days/${date}/check-in`);
+export const checkOut = (aid: string, date: string, report: string) => api<{ returned: number }>('POST', `${SV(aid)}/days/${date}/check-out`, { report });
 
 /* ---------- residents' messages to the office ---------- */
 export type Convo = { id: string; subject: string; topic: string; status: 'Open' | 'Closed'; lastMessageAt: string; preview: string; lastFrom: 'resident' | 'staff' | null; unread: number; resident: string; unit: string | null };
@@ -119,3 +129,12 @@ export const removeNote = (aid: string, id: string) => api('DELETE', `${A(aid)}/
 export type BroadcastResult = { ref: string; stats: { recipients: number; reached: number; logged: number; skipped: number; failed: number } };
 export const broadcast = (aid: string, m: { title: string; body: string; channels: ('portal' | 'push' | 'email')[]; important: boolean }) =>
   api<BroadcastResult>('POST', `${A(aid)}/comms/messages`, { type: 'Notice', title: m.title, body: m.body, channels: m.channels, priority: m.important ? 'Important' : 'Normal', audience: { kind: 'all' }, action: 'send' });
+
+/** the society's towers, in the office's order */
+export const towers = async (aid: string) => (await api<{ order: string[] }>('GET', `${A(aid)}/towers`)).order;
+/** a notice on residents' notice board (and as an app alert): to everyone, or to some towers; an important one must be acknowledged */
+export const sendNotice = (aid: string, n: { title: string; body: string; important: boolean; towers: string[] | null }) =>
+  api<BroadcastResult>('POST', `${A(aid)}/comms/messages`, {
+    type: 'Announcement', title: n.title, body: n.body, priority: n.important ? 'Important' : 'Normal', channels: ['portal', 'push'],
+    audience: n.towers ? { kind: 'towers', towers: n.towers } : { kind: 'all' }, requiresAck: n.important, action: 'send',
+  });

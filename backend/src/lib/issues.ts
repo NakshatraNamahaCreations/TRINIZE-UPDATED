@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { DB } from '../db/client.js';
 import { issueEvents, issueNotes, issues, issueUpdates, units, users, vendors, type IssueStatus, type Priority } from '../db/schema.js';
+import { liftTrap } from './assistant.js';
 import { audit } from './audit.js';
 import { notify } from './community.js';
 import { badRequest, conflict, notFound } from './http.js';
@@ -33,11 +34,27 @@ export function parseRef(r: string) {
 
 type Tx = Parameters<Parameters<DB['transaction']>[0]>[0];
 
+const RANK: Record<Priority, number> = { Low: 0, Medium: 1, High: 2, Emergency: 3 };
+const LIFT = /\b(lift|elevator)s?\b|लिफ्ट|ಲಿಫ್ಟ್/i;
+/**
+ * The least a request may be filed as, whatever was picked: a lift out of service leaves people stranded on
+ * upper floors, so it is High; anyone stuck or trapped in a lift is an Emergency.
+ */
+export function safetyFloor(o: { priority: Priority; category: string; asset?: string | null; title: string; details?: string }): Priority {
+  const text = `${o.title} ${o.details ?? ''}`;
+  const lift = o.category === 'Lifts' || o.asset === 'Lift' || LIFT.test(text);
+  // "trapped" needs a lift in the same sentence — or a lift request saying someone is stuck in it
+  const trapped = liftTrap(text) || ((o.category === 'Lifts' || o.asset === 'Lift') && liftTrap('lift ' + text));
+  const floor: Priority = trapped ? 'Emergency' : lift ? 'High' : 'Low';
+  return RANK[floor] > RANK[o.priority] ? floor : o.priority;
+}
+
 export async function createIssue(db: DB, o: {
   associationId: string; reporterId: string; reporterName: string; unitId: string | null;
   title: string; category: string; location: string; priority: Priority; via: 'chat' | 'form' | 'admin'; details?: string; photoUrl?: string;
   scope?: 'unit' | 'common'; asset?: string;
 }) {
+  o = { ...o, priority: safetyFloor(o) };
   const made = await db.transaction(async tx => {
     // per-society running number; the unique (association, number) index settles any race
     const [{ next }] = (await tx.select({ next: sql<number>`coalesce(max(${issues.number}), 1042) + 1` }).from(issues)

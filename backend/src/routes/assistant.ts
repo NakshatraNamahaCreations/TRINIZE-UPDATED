@@ -19,6 +19,8 @@ const CHIPS = ['Report an issue', 'When is the water shutdown?', 'What are the p
 /** `link` opens the screen that holds the answer; `offer` lets the resident pass an unanswered question to the office in one tap */
 type Reply = {
   text: string; source: string | null; chips?: string[]; calls?: [string, string][]; link?: { label: string; href: string }; offer?: 'ask_office';
+  /** an emergency: the app shows its SOS button first, above the numbers */
+  sos?: boolean;
   /** the message was not answered because it read as rude; the app hands it back to be rephrased */
   flagged?: { level: 'warn' | 'block'; words: string[] };
 };
@@ -146,10 +148,12 @@ export const assistantRoutes = ({ config, db, ai, quota }: Deps): FastifyPluginA
     if (isEmergency(understood)) {
       const numbers = await db.select({ name: contacts.name, phone: contacts.phone }).from(contacts)
         .where(and(eq(contacts.associationId, r.associationId), eq(contacts.group, 'emergency'))).orderBy(asc(contacts.position));
+      const calls = numbers.map(n => [n.name, n.phone.replace(/\s/g, '')] as [string, string]);
+      // 112 reaches police, fire and ambulance anywhere in India
+      if (!calls.some(([, p]) => p === '112')) calls.push(['National emergency · 112', '112']);
       return done({
-        text: 'If this is a medical, fire or security emergency, call now — tap a number below.\n\nI have not contacted any emergency service, and I am not able to. Once everyone is safe, I can log an issue for the committee.',
-        source: 'Emergency contacts · Directory', chips: ['Open the Directory', 'Report an issue'],
-        calls: numbers.map(n => [n.name, n.phone.replace(/\s/g, '')] as [string, string]),
+        text: 'Press SOS to alert the security team right now — they see it at the gate at once. If someone is hurt, in danger or stuck in a lift, also call a number below.\n\nI have not contacted any emergency service myself. Once everyone is safe, I can log an issue for the committee.',
+        source: 'Emergency contacts · Directory', chips: ['Open the Directory', 'Report an issue'], sos: true, calls,
       });
     }
 

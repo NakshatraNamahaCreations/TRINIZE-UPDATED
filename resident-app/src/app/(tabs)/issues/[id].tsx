@@ -7,7 +7,7 @@ import { Btn, Card, EmptyState, Header, Icon, Meta, Pill, Row, Screen, Sect, Txt
 import { useT } from '@/i18n';
 import type { IssueStatus } from '@/store/data';
 import { LIVE } from '@/lib/api';
-import { rateIssueLive } from '@/lib/live';
+import { ago, rateIssueLive } from '@/lib/live';
 import { IssueChat } from '@/components/IssueChat';
 import { useStore } from '@/store/store';
 import { C } from '@/theme';
@@ -38,7 +38,7 @@ export default function IssueDetail() {
           <Pill tone={i.pri === 'High' || i.pri === 'Emergency' ? 'bad' : i.pri === 'Low' ? 'dim' : 'warn'}>{tx('pri', i.pri)}</Pill>
         </Row>
         <Txt w={700} style={{ fontSize: 14, marginTop: 6 }}>{i.title}</Txt>
-        <Meta style={{ marginTop: 4 }}>{i.loc} · {t('issues.raised', { when: i.when })} · {i.sla}</Meta>
+        <Meta style={{ marginTop: 4 }}>{i.loc} · {t('issues.raised', { when: i.at ? ago(i.at) : i.when })} · {i.sla}</Meta>
         {i.vendor !== '—' && <Meta style={{ marginTop: 2 }}>{tr('issue.assignedTo', { vendor: <Txt w={700} style={{ fontSize: 12 }}>{i.vendor}</Txt> })}</Meta>}
       </Card>
 

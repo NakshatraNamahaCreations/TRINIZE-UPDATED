@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useUI } from '@/components/Overlay';
+import { SyncNotice, useLoaded } from '@/components/SyncNotice';
 import { Card, EmptyState, Header, Icon, initials, Input, Meta, Screen, Sect, stagger, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
 import type { Contact } from '@/store/data';
@@ -24,6 +25,7 @@ export default function Directory() {
     [t('dir.vendors'), state.directory.vendors.filter(match)],
   ];
   const any = groups.some(([, list]) => list.length);
+  const loaded = useLoaded('community');
 
   return (
     <Screen header={<Header title={t('dir.title')} back="/" bell />}>
@@ -31,7 +33,10 @@ export default function Directory() {
         <Input placeholder={t('dir.search')} value={q} onChangeText={setQ} autoCorrect={false} style={{ paddingLeft: 36 }} />
         <Icon name="search" size={17} color={C.ink3} style={s.searchIc} />
       </View>
-      {!any && <EmptyState icon="search-outline" title={t('dir.none.t')} body={t('dir.none.b', { q })} />}
+      <SyncNotice part="community" />
+      {/* a search with no results, or a directory with nothing in it yet — never "nothing matches “”" */}
+      {!any && q.trim() && <EmptyState icon="search-outline" title={t('dir.none.t')} body={t('dir.none.b', { q: q.trim() })} />}
+      {!any && !q.trim() && loaded && <EmptyState icon="call-outline" title={t('dir.empty.t')} body={t('dir.empty.b')} />}
       {groups.filter(([, list]) => list.length).map(([title, list], gi) => (
         <View key={title}>
           <Sect title={title} />

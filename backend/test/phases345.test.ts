@@ -33,7 +33,7 @@ describe('assistant on built-in rules (no AI key)', () => {
     expect(unknown.source).toBeNull();
     expect(unknown.text).toContain('couldn’t find');
     const fire = await ask('aag lagi hai');
-    expect(fire.calls.map((c: [string, string]) => c[1])).toEqual(['+918041287001', '108', '101']);
+    expect(fire.calls.map((c: [string, string]) => c[1])).toEqual(['+918041287001', '108', '101', '112']); // 112, the national number, is always offered
     expect(fire.text).toContain('I have not contacted any emergency service');
   });
 

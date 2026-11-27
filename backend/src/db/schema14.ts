@@ -36,6 +36,11 @@ export const siteVisits = pgTable('site_visits', {
   status: text('status').$type<SiteVisitStatus>().notNull().default('Planned'),
   /** shown to residents, e.g. why a visit was cancelled */
   note: text('note').notNull().default(''),
+  /** the manager arrived and left (the visit cycle); the hours between count towards their weekly time on site */
+  checkedInAt: timestamp('checked_in_at', { withTimezone: true }),
+  checkedOutAt: timestamp('checked_out_at', { withTimezone: true }),
+  /** what was done on the visit, written when the manager leaves; residents and the office see it */
+  report: text('report').notNull().default(''),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, t => [unique().on(t.associationId, t.date)]);
 

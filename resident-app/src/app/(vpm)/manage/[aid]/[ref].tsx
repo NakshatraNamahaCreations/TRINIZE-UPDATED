@@ -8,7 +8,7 @@ import { Btn, Card, EmptyState, Icon, Input, Meta, Pill, Row, Sect, Txt } from '
 import { useT } from '@/i18n';
 import { ApiError } from '@/lib/api';
 import {
-  addInvoice, addNote, decideEstimate, invoicesFor, messages, move, rupees, sendMessage, setEstimate, setInvoice, ticket, vendorProgress, vendors, when,
+  addInvoice, addNote, decideEstimate, invoicesFor, messages, move, rupees, sendMessage, setEstimate, setInvoice, ticket, tickets, vendorProgress, vendors, when,
   type Invoice, type Message, type Ticket, type Vendor,
 } from '@/lib/vpm';
 import { nextDays } from '@/store/dates';
@@ -41,6 +41,11 @@ export default function VpmTicket() {
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [msg, setMsg] = useState('');
   const [internal, setInternal] = useState('');
+  // closing it without a vendor: resolved by the manager, or a duplicate of another open request
+  const [closeMode, setCloseMode] = useState<null | 'resolve' | 'duplicate'>(null);
+  const [closeNote, setCloseNote] = useState('');
+  const [others, setOthers] = useState<Ticket[]>([]);
+  const [dupOf, setDupOf] = useState('');
 
   const fail = useCallback((e: unknown) => toast(e instanceof ApiError ? e.message : t('live.failed'), 'alert-circle'), [toast, t]);
   const side = useCallback(() => {
@@ -60,6 +65,16 @@ export default function VpmTicket() {
     try { setIt(await work()); setNote(''); toast(done, 'checkmark-circle'); } catch (e) { fail(e); } finally { setBusy(false); }
   };
   const n = note.trim() || undefined;
+
+  /** Resolved without a vendor — moving through Acknowledged first when it hasn't been picked up yet. The note is on the resident's timeline. */
+  const closeYourself = (resolution: string, done: string) => act(async () => {
+    if (it?.status === 'Submitted') await move(aid, ref, 'Acknowledged');
+    return move(aid, ref, 'Resolved', { note: resolution });
+  }, done);
+  const openDuplicate = () => {
+    setCloseMode('duplicate'); setDupOf('');
+    tickets(aid).then(l => setOthers(l.filter(x => x.ref !== ref && x.status !== 'Resolved' && x.status !== 'Closed'))).catch(fail);
+  };
 
   const schedule = () => {
     const d = new Date();
@@ -188,6 +203,37 @@ export default function VpmTicket() {
               {it.status === 'On Hold'
                 ? <Btn full icon="play-outline" label={t('mgr.resume')} disabled={busy} onPress={() => act(() => move(aid, ref, it.vendor ? 'Assigned' : 'In Progress', { note: t('mgr.resumedNote') }), t('mgr.saved'))} />
                 : it.status !== 'Submitted' && <Btn full variant="ghost" icon="pause-outline" label={t('mgr.hold')} disabled={busy} onPress={() => act(() => move(aid, ref, 'On Hold', { note: n ?? t('mgr.holdNote') }), t('mgr.saved'))} style={{ marginTop: 8 }} />}
+
+              {/* closing it without a vendor (N-06): sorted on the spot, or the same as another request */}
+              <View style={s.closeBox}>
+                <Txt w={700} style={s.label0}>{t('mgr.closeSelf')}</Txt>
+                {!closeMode && (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <Btn variant="soft" icon="checkmark-done-outline" label={t('mgr.resolveSelf')} disabled={busy} onPress={() => { setCloseMode('resolve'); setCloseNote(''); }} style={{ flex: 1 }} />
+                    <Btn variant="soft" icon="copy-outline" label={t('mgr.dup')} disabled={busy} onPress={openDuplicate} style={{ flex: 1 }} />
+                  </View>
+                )}
+                {closeMode === 'resolve' && (
+                  <>
+                    <Input value={closeNote} onChangeText={setCloseNote} placeholder={t('mgr.resolveNotePh')} maxLength={500} multiline style={{ minHeight: 60, textAlignVertical: 'top' }} />
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                      <Btn icon="checkmark-done" label={t('mgr.resolveBtn')} disabled={busy || closeNote.trim().length < 3} onPress={() => { void closeYourself(closeNote.trim(), t('mgr.resolvedSelf')); setCloseMode(null); }} style={{ flex: 1 }} />
+                      <Btn variant="ghost" label={t('common.cancel')} onPress={() => setCloseMode(null)} style={{ flex: 1 }} />
+                    </View>
+                  </>
+                )}
+                {closeMode === 'duplicate' && (
+                  <>
+                    <Meta style={{ marginBottom: 6 }}>{t('mgr.dupOf')}</Meta>
+                    {!others.length && <Meta>{t('mgr.dupNone')}</Meta>}
+                    <View style={s.chips}>{others.slice(0, 12).map(o => <Chip key={o.ref} label={`${o.ref} · ${o.title}`} on={dupOf === o.ref} onPress={() => setDupOf(o.ref)} />)}</View>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                      <Btn icon="copy" label={t('mgr.dupBtn')} disabled={busy || !dupOf} onPress={() => { void closeYourself(t('mgr.dupNote', { ref: dupOf }), t('mgr.dupDone')); setCloseMode(null); }} style={{ flex: 1 }} />
+                      <Btn variant="ghost" label={t('common.cancel')} onPress={() => setCloseMode(null)} style={{ flex: 1 }} />
+                    </View>
+                  </>
+                )}
+              </View>
             </Card>
           </>
         )}
@@ -276,6 +322,7 @@ function Fact({ icon, label, value }: { icon: Parameters<typeof Icon>[0]['name']
 }
 
 const s = StyleSheet.create({
+  closeBox: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.line },
   page: { flex: 1, backgroundColor: C.bg },
   hdr: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingBottom: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: C.line },
   body: { fontSize: 13.5, color: C.ink2, lineHeight: 20, marginTop: 6 },

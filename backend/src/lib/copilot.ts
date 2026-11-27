@@ -289,6 +289,6 @@ export function ruleDraft(kind: DraftKind, details: string, society: string): { 
     case 'Vendor follow-up': return { title: 'Follow-up on pending work', body: `Hello, this is a follow-up from ${society}${about ? ' about ' + about : ' about [work order]'}. The work is still pending. Please share the status and when it will be completed.` };
     case 'Complaint response': return { title: 'About your complaint', body: `Dear resident, thank you for telling us${about ? ' about ' + about : ''}. We are sorry for the trouble. The matter has been taken up and we will update you on [date]. — ${society}` };
     case 'Resident reply': return { title: 'Reply from the society office', body: `Dear resident, thank you for your message${about ? ' about ' + about : ''}. [Your answer]. Please write back if you need anything else. — ${society}` };
-    case 'Owner monthly summary': return { title: 'Your monthly summary', body: `Dear owner, here is the summary for ${about || '[month]'}: rent collected [amount], repairs [amount], net [amount]. The full statement is in the Owner portal in the app. — ${society}` };
+    case 'Owner monthly summary': return { title: 'Your monthly summary', body: `Dear owner, here is the summary for ${about || '[month]'}: rent collected [amount], repairs [amount], net [amount]. The full statement is under My homes in the app. — ${society}` };
   }
 }

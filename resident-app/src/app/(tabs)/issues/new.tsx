@@ -30,7 +30,8 @@ export default function NewIssue() {
   const [about, setAbout] = useState<'unit' | 'common'>('unit');
   const [asset, setAsset] = useState(ASSETS[0]);
   const [other, setOther] = useState('');
-  const [pri, setPri] = useState<Priority>('Medium');
+  const [chosenPri, setPri] = useState<Priority | null>(null); // null = not picked: follow the category
+
   const [photo, setPhoto] = useState<string | undefined>();
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -38,9 +39,11 @@ export default function NewIssue() {
   const [visit, setVisit] = useState<ManagerInfo['next']>(null);
   const [onVisit, setOnVisit] = useState<'any' | 'next'>('any');
   useEffect(() => { managerInfo().then(i => setVisit(i.manager ? i.next : null)).catch(() => {}); }, []);
-  const canVisit = !!visit && pri !== 'Emergency';
 
   const category = cat ?? guessCategory(title);
+  // a lift out of service strands people on upper floors: it starts at High
+  const pri: Priority = chosenPri ?? (category === 'Lifts' || (about === 'common' && asset === 'Lift') ? 'High' : 'Medium');
+  const canVisit = !!visit && pri !== 'Emergency';
   const place = about === 'common' ? asset : loc === 'other' ? other.trim() : loc;
   const ok = title.trim().length >= 4 && !!place;
 

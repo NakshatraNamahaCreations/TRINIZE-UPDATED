@@ -15,6 +15,11 @@ import { forgetPlans, modulesWith, planConfig, type PlanConfig } from '../lib/pl
 
 const Id = z.object({ id: z.uuid() });
 const DAY = 864e5;
+/** calendar days from today to a date, counted on India-time days: 27 Nov → 1 Dec is 4, whatever the hour */
+export const calendarDaysTo = (at: Date, now = Date.now()) => {
+  const ist = (t: number) => Math.floor((t + 330 * 60_000) / DAY);
+  return ist(at.getTime()) - ist(now);
+};
 /** the last n calendar months, oldest first */
 function months(n: number) {
   const now = new Date();
@@ -36,15 +41,18 @@ export const opsRoutes = ({ config, db, messenger }: Deps): FastifyPluginAsync =
    * in memory — so one page load costs six queries, however many of those views it needs.
    */
   const base = async () => {
-    const [subs, inv, usage, tix, onApp, people] = await Promise.all([
+    const [subs, inv, usage, tix, onApp, people, homes] = await Promise.all([
       db.select().from(subscriptions).innerJoin(associations, eq(associations.id, subscriptions.associationId)),
       db.select({ i: invoices, name: associations.name }).from(invoices).innerJoin(associations, eq(associations.id, invoices.associationId)).orderBy(asc(invoices.dueAt)),
       db.select().from(usageSnapshots).orderBy(asc(usageSnapshots.month)),
       db.select({ t: supportTickets, association: associations.name }).from(supportTickets).innerJoin(associations, eq(associations.id, supportTickets.associationId)).orderBy(asc(supportTickets.slaDueAt)),
       db.select({ associationId: units.associationId, n: sql<number>`count(*)::int` }).from(units).groupBy(units.associationId),
       db.select({ associationId: units.associationId, n: sql<number>`count(distinct ${unitMembers.userId})::int` }).from(unitMembers).innerJoin(units, eq(units.id, unitMembers.unitId)).groupBy(units.associationId),
+      // flats with at least one verified resident on the app
+      db.select({ associationId: units.associationId, n: sql<number>`count(distinct ${unitMembers.unitId})::int` }).from(unitMembers).innerJoin(units, eq(units.id, unitMembers.unitId))
+        .where(eq(unitMembers.status, 'active')).groupBy(units.associationId),
     ]);
-    return { subs, inv, usage, tix, onApp, people };
+    return { subs, inv, usage, tix, onApp, people, homes };
   };
   type Base = Awaited<ReturnType<typeof base>>;
 
@@ -59,12 +67,14 @@ export const opsRoutes = ({ config, db, messenger }: Deps): FastifyPluginAsync =
       const open = (tixBy.get(a.id) ?? []).map(r => r.t).filter(t => t.status !== 'Resolved');
       const recent = open.filter(t => now - t.createdAt.getTime() < 30 * DAY).length;
       const pay = payStateOf(s.state, mine);
-      const adoption = series.at(-1) ?? 0;
+      // adoption today is worked out from the flats actually set up and the residents actually on the app — not a stored figure
+      const setUp = b.onApp.find(x => x.associationId === a.id)?.n ?? 0, withResident = b.homes.find(x => x.associationId === a.id)?.n ?? 0;
+      const adoption = setUp ? Math.round((withResident / setUp) * 100) : 0;
       const overdue = mine.filter(i => i.paid < i.amount && i.dueAt.getTime() < now);
       return {
         id: a.id, name: a.name, short: a.short, city: a.city, kind: s.kind, plan: s.plan, billing: s.billing, state: s.state, pay,
         plots: s.plots, owners: s.owners, adoption, usage: series.slice(-12), annual: s.annualAmount, mrr: Math.round(s.annualAmount / 12),
-        renewsAt: s.renewsAt, daysToRenewal: Math.ceil((s.renewsAt.getTime() - now) / DAY), openTickets: open.length,
+        renewsAt: s.renewsAt, daysToRenewal: calendarDaysTo(s.renewsAt, now), openTickets: open.length,
         overdue: { count: overdue.length, amount: overdue.reduce((n, i) => n + (i.amount - i.paid), 0) },
         onApp: { units: b.onApp.find(x => x.associationId === a.id)?.n ?? 0, residents: b.people.find(x => x.associationId === a.id)?.n ?? 0 },
         health: healthOf({ state: s.state, pay, adoption, usage: series, openTickets: open.length, recentTickets: recent }),
@@ -98,7 +108,7 @@ export const opsRoutes = ({ config, db, messenger }: Deps): FastifyPluginAsync =
       }),
     };
   };
-  const invoicesOf = (b: Base) => b.inv.map(({ i, name }) => ({ ...i, association: name, state: invoiceState(i), balance: i.amount - i.paid, daysToDue: Math.ceil((i.dueAt.getTime() - Date.now()) / DAY) }));
+  const invoicesOf = (b: Base) => b.inv.map(({ i, name }) => ({ ...i, association: name, state: invoiceState(i), balance: i.amount - i.paid, daysToDue: calendarDaysTo(i.dueAt) }));
   const ticketsOf = (b: Base) => b.tix.map(({ t, association }) => ({ ...ticketOut(t), association }));
   /** share of associations whose plan includes each module */
   const modulesOf = (list: Row[], c: PlanConfig) => {

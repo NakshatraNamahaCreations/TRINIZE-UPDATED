@@ -14,7 +14,11 @@ export type SiteItem = {
   extra: boolean; note: string; reply: string; ref: string | null; issueStatus: string | null;
   resident: { name: string; unit: string | null } | null; createdAt: string;
 };
-export type SiteDay = { id: string | null; date: string; start: string; end: string; status: 'Planned' | 'Done' | 'Cancelled'; note: string; startsAt: string; items: SiteItem[] };
+export type SiteDay = {
+  id: string | null; date: string; start: string; end: string; status: 'Planned' | 'Done' | 'Cancelled'; note: string; startsAt: string; items: SiteItem[];
+  /** the visit cycle: the manager checks in and out on the phone, and leaves a report */
+  checkedInAt?: string | null; checkedOutAt?: string | null; report?: string;
+};
 export type SitePlan = { weekday: number; start: string; end: string };
 export type SiteBoard = { manager: { id: string; name: string; phone: string | null; title: string } | null; plan: SitePlan | null; today: string; days: SiteDay[]; requests: SiteItem[] };
 export type OpsStats = {

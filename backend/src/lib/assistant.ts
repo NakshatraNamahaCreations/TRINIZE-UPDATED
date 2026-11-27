@@ -23,9 +23,16 @@ export function understand(text: string) {
   return t;
 }
 
-/** never answered by a model: the resident gets the numbers to call, immediately */
+/** never answered by a model: the resident gets SOS and the numbers to call, immediately — including anyone stuck or trapped in a lift */
 export const isEmergency = (understood: string) =>
-  /\b(fire|smoke|gas leak|accident|injured|injury|bleeding|unconscious|emergency|ambulance|intruder|burglar|theft|robbery|heart attack|108|101)\b/.test(understood);
+  /\b(fire|smoke|gas leak|accident|injured|injury|bleeding|unconscious|emergency|ambulance|intruder|burglar|theft|robbery|heart attack|trapped)\b/.test(understood)
+  // a number only when someone asks to call it — "call 112", "dial 108" — never "flat 112"
+  || /\b(call|dial|ring|phone)\s+(1(01|08|12))\b/.test(understood)
+  || liftTrap(understood);
+const LIFT = /\b(lift|elevator)s?\b|लिफ्ट|ಲಿಫ್ಟ್/;
+const STUCK = /\b(stuck|trapped|phas|phasa|phasi|phans|phansa|phanse|phansi|fasa|fasi|atak|atka|atke|atki)\b|फंस|फँस|अटक|ಸಿಕ್ಕಿ|ಸಿಲುಕಿ/;
+/** someone stuck in a lift, in one sentence: "Someone is stuck in the lift", "lift mein phas gaye", "लिफ्ट में फंस गए" */
+export const liftTrap = (text: string) => text.toLowerCase().split(/[.?!\n]/).some(s => LIFT.test(s) && STUCK.test(s));
 
 const STOP = new Set('the a an is are was were be to of in on at for and or what when where which who how much many do does can i my me we our it this that there with from by about any please tell'.split(' '));
 /** crude stemming so "visitors park" meets "visitor parking": plural, -ing, -ed */

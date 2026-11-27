@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DEMO } from '../src/db/seed.js';
 import { todayIst } from '../src/routes/sitevisits.js';
@@ -240,5 +241,53 @@ describe('the primary property manager, when a society has several', () => {
     await t.call('PUT', `/v1/ops/vpms/${made.body.id}/societies`, { token: op, body: { associationIds: [t.associationId] } });
     expect(await shown()).toBe('Imran Qureshi');
     await t.call('DELETE', `/v1/ops/vpms/${made.body.id}`, { token: op });
+  });
+});
+
+describe('the visit cycle: check in, the agenda, check out with a report', () => {
+  it('records the visit, shows residents the report, and counts the hours on site', async () => {
+    const today = todayIst();
+    // only on the day itself
+    expect((await t.call('POST', `${A()}/days/${addDays(today, 2)}/check-in`, { token: vpm })).body.error.code).toBe('not_today');
+    const inn = await t.call('POST', `${A()}/days/${today}/check-in`, { token: vpm });
+    expect(inn.status).toBe(200);
+    expect(inn.body.checkedInAt).toBeTruthy();
+    expect((await t.call('POST', `${A()}/days/${today}/check-in`, { token: vpm })).body.error.code).toBe('already_checked_in');
+    // on site now: residents can see it
+    const now = (await t.call('GET', '/v1/manager', { token: resident })).body.visits.find((v: { date: string }) => v.date === today);
+    expect(now?.onSite).toBe(true);
+    // once on site, the day can't be cancelled or closed without a report
+    expect((await t.call('PUT', `${A()}/days/${today}`, { token: vpm, body: { status: 'Cancelled' } })).body.error.code).toBe('visit_in_progress');
+    // the agenda: one item planned and done
+    const item = await t.call('POST', `${A()}/items`, { token: vpm, body: { date: today, time: '09:00', title: 'Pump room check', kind: 'Inspection', location: 'Basement' } });
+    expect((await t.call('PUT', `${A()}/items/${item.body.id}`, { token: vpm, body: { status: 'Done' } })).body.status).toBe('Done');
+    // leaving needs a report
+    expect((await t.call('POST', `${A()}/days/${today}/check-out`, { token: vpm, body: { report: 'ok' } })).status).toBe(400);
+    const out = await t.call('POST', `${A()}/days/${today}/check-out`, { token: vpm, body: { report: 'Checked the pump room: pressure valve replaced, water pressure normal again.' } });
+    expect(out.status).toBe(200);
+    expect(out.body.status).toBe('Done');
+    const after = (await t.call('GET', '/v1/manager', { token: resident })).body.visits.find((v: { date: string }) => v.date === today);
+    expect(after).toMatchObject({ status: 'Done', onSite: false, report: 'Checked the pump room: pressure valve replaced, water pressure normal again.' });
+    // a finished visit with its report is final
+    expect((await t.call('PUT', `${A()}/days/${today}`, { token: vpm, body: { status: 'Planned' } })).body.error.code).toBe('visit_finished');
+    // the manager's week
+    const me = (await t.call('GET', '/v1/vpm/me', { token: vpm })).body;
+    expect(me.band).toEqual({ min: 9, max: 12 });
+    expect(me.week.visits).toBeGreaterThanOrEqual(1);
+    expect(me.week.hours).toBeGreaterThanOrEqual(0);
+  });
+  it('keeps a visit left open on an earlier day on the board, so it can still be finished, and caps its hours', async () => {
+    const past = addDays(todayIst(), -3);
+    // checked in three days ago (03:00 to 06:00 IST) and never checked out
+    await t.db.execute(sql`insert into site_visits (association_id, date, start, "end", status, checked_in_at) values (${t.associationId}, ${past}, '03:00', '06:00', 'Planned', ${past + 'T03:00:00+05:30'}::timestamptz)`);
+    const open = (await t.call('GET', A(), { token: vpm })).body.days.find((d: { date: string }) => d.date === past);
+    expect(open).toMatchObject({ checkedInAt: expect.any(String), checkedOutAt: null });
+    // the open visit counts at most to its planned end (3 h), not to now
+    const me = (await t.call('GET', '/v1/vpm/me', { token: vpm })).body;
+    expect(me.week).not.toBeNull();
+    expect(me.week.hours).toBeLessThan(24);
+    const out = await t.call('POST', `${A()}/days/${past}/check-out`, { token: vpm, body: { report: 'Forgot to check out; the work on the day is in the agenda.' } });
+    expect(out.status).toBe(200);
+    expect((await t.call('GET', A(), { token: vpm })).body.days.some((d: { date: string }) => d.date === past)).toBe(false);
   });
 });

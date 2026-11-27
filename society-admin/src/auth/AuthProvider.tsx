@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         res = await api<StaffLogin>('POST', '/v1/auth/staff/mfa', { mfaToken: res.mfaToken, code }, { auth: false });
       }
       const role = res.roles.find(r => r.associationId);
-      if (!role?.associationId) return { ok: false, error: 'This account doesn’t manage a society. Operators sign in to the Owner Portal.' };
+      if (!role?.associationId) return { ok: false, error: 'This account doesn’t manage a society. Operators sign in to the Operator console.' };
       const s: Stored = {
         name: res.user.name, email: res.user.email, role: role.title ?? role.role, initials: initials(res.user.name),
         tokens: { access: res.accessToken, refresh: res.refreshToken }, aid: role.associationId,

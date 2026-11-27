@@ -10,6 +10,8 @@ export type VisitItem = { id: string; time: string | null; title: string; locati
 export type VisitDay = {
   date: string; start: string; end: string; status: 'Planned' | 'Done' | 'Cancelled'; note: string; startsAt: string;
   items: VisitItem[];
+  /** the manager has checked in and is on site now; the report is shown once they have left */
+  onSite?: boolean; report?: string;
   /** other residents' requests on this visit — counted, never shown */
   others: number;
 };

@@ -55,7 +55,9 @@ export function CommandCentre() {
   const overdue = INVOICES.filter(i => i.days < 0).sort((a, b) => a.days - b.days);
   const dues = overdue.reduce((s, i) => s + i.amt, 0);
   const atRisk = ASSOC.filter(a => health(a).score < 52).length;
-  const growth = MRR[0] ? Math.round((mrr / MRR[0] - 1) * 100) : 0;
+  // measured from the first month with revenue — a series that starts at zero would otherwise read "no change"
+  const firstMrr = MRR.find(v => v > 0) ?? 0;
+  const growth = firstMrr && mrr ? Math.round((mrr / firstMrr - 1) * 100) : 0;
   const renewing = ASSOC.filter(a => a.state !== 'Suspended' && a.days <= 90).sort((a, b) => a.days - b.days).slice(0, 6);
   const openIssues = issues.filter(i => i.st !== 'Resolved').slice(0, 6);
 
@@ -73,7 +75,7 @@ export function CommandCentre() {
       </div>
 
       <div className="kpis">
-        <Kpi label="Monthly recurring revenue" value={fmtL(mrr)} sub={growth ? <><span className={growth > 0 ? 'up' : 'down'}>{growth > 0 ? '▲' : '▼'} {Math.abs(growth)}%</span> over 12 months</> : 'No change over 12 months'} onClick={() => go('renewals')} extra={<Spark data={MRR.length > 1 ? MRR : [0, 0]} color="#5B3FE0" w={64} h={26} />} />
+        <Kpi label="Monthly recurring revenue" value={fmtL(mrr)} sub={growth ? <><span className={growth > 0 ? 'up' : 'down'}>{growth > 0 ? '▲' : '▼'} {Math.abs(growth)}%</span> over 12 months</> : firstMrr ? 'Flat over 12 months' : 'Not enough history yet'} onClick={() => go('renewals')} extra={<Spark data={MRR.length > 1 ? MRR : [0, 0]} color="#5B3FE0" w={64} h={26} />} />
         <Kpi label="Annual recurring revenue" value={fmtL(arr)} sub="Active accounts, excluding trials" onClick={() => go('renewals')} />
         <Kpi label="Outstanding dues" value={fmtL(dues)} sub={overdue.length ? `${overdue.length} invoice${overdue.length === 1 ? '' : 's'} overdue` : 'Nothing overdue'} onClick={() => go('collections')} hot={overdue.length > 0} />
         <Kpi label="Accounts at risk" value={atRisk} sub={`of ${ASSOC.length} · health below 52`} onClick={() => go('renewals')} hot={atRisk > 0} />

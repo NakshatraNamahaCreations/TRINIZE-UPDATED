@@ -40,11 +40,13 @@ export default function VpmSocieties() {
   const [name, setName] = useState('');
   const [list, setList] = useState<Society[] | null>(null);
   const [urgent, setUrgent] = useState<Attention[]>([]);
+  const [week, setWeek] = useState<{ hours: number; visits: number } | null>(null);
+  const [band, setBand] = useState<{ min: number; max: number } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { const me = await vpmMe(); setName(me.user.name); setList(me.societies); setUrgent(me.attention ?? []); }
+    try { const me = await vpmMe(); setName(me.user.name); setList(me.societies); setUrgent(me.attention ?? []); setWeek(me.week ?? null); setBand(me.band ?? null); }
     catch (e) { toast(e instanceof ApiError ? e.message : t('live.failed'), 'alert-circle'); }
     finally { setLoading(false); }
   }, [toast, t]);
@@ -57,7 +59,8 @@ export default function VpmSocieties() {
   const open = (so: Society) => router.push({ pathname: '/manage/[aid]/dashboard', params: { aid: so.id, name: so.short } });
 
   const all = list ?? [];
-  const waiting = sum(all, 'fresh') + sum(all, 'overdue') + sum(all, 'emergencies');
+  // one count, from the server, by the same rule as the list below (a request that is both new and overdue counts once)
+  const waiting = all.reduce((n, so) => n + (so.needs ?? 0), 0);
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={[s.hdr, { paddingTop: insets.top + 10 }]}>
@@ -88,7 +91,20 @@ export default function VpmSocieties() {
             <Tile icon="checkmark-done" n={sum(all, 'resolvedWeek')} label={t('mgr.sResolved')} onPress={() => show('resolved')} tone="good" />
           </View>
 
-          <Sect title={t('mgr.attention')} />
+          {week && band && (
+            <View style={s.week}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[s.statIc, { backgroundColor: C.accBg, marginBottom: 0 }]}><Icon name="time" size={17} color={C.acc} /></View>
+                <View style={{ flex: 1 }}>
+                  <Txt w={800} style={{ fontSize: 14 }}>{t('mgr.weekHours', { h: week.hours, min: band.min, max: band.max })}</Txt>
+                  <Meta>{t('mgr.weekVisits', { n: week.visits })}</Meta>
+                </View>
+              </View>
+              <View style={s.track}><View style={[s.fill, { width: `${Math.min(100, (week.hours / band.max) * 100)}%`, backgroundColor: week.hours > band.max ? C.warn : C.acc }]} /></View>
+            </View>
+          )}
+
+          <Sect title={urgent.length < waiting ? t('mgr.attentionOf', { shown: urgent.length, n: waiting }) : t('mgr.attention')} />
           {!urgent.length && (
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -144,7 +160,7 @@ export default function VpmSocieties() {
               <Pressable style={s.act} onPress={() => router.push({ pathname: '/manage/[aid]/inspections', params: { aid: so.id } })} accessibilityRole="button">
                 <Icon name="clipboard-outline" size={15} color={C.acc} /><Txt w={700} style={s.actT}>{t('ins.title')}</Txt>
               </Pressable>
-              <Pressable style={s.act} onPress={() => router.push({ pathname: '/manage/[aid]', params: { aid: so.id, name: so.short, tab: 'notice' } })} accessibilityRole="button">
+              <Pressable style={s.act} onPress={() => router.push({ pathname: '/manage/[aid]/notice', params: { aid: so.id, name: so.short } })} accessibilityRole="button">
                 <Icon name="megaphone-outline" size={15} color={C.acc} /><Txt w={700} style={s.actT}>{t('mgr.aNotice')}</Txt>
               </Pressable>
               <Pressable style={s.act} onPress={() => router.push({ pathname: '/manage/[aid]/visits', params: { aid: so.id, name: so.short } })} accessibilityRole="button">
@@ -167,6 +183,9 @@ const s = StyleSheet.create({
   tile: { width: 42, height: 42, borderRadius: 12, backgroundColor: C.accBg, alignItems: 'center', justifyContent: 'center' },
   hero: { marginHorizontal: 16, marginTop: 14, borderRadius: 18, padding: 18 },
   stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 16, marginTop: 12 },
+  week: { marginHorizontal: 16, marginTop: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 12 },
+  track: { height: 8, borderRadius: 4, backgroundColor: C.dimBg, overflow: 'hidden', marginTop: 10 },
+  fill: { height: '100%', borderRadius: 4 },
   stat: { flexBasis: '30%', flexGrow: 1, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 12, gap: 2 },
   statIc: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   acts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.line },

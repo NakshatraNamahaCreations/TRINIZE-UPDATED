@@ -1,17 +1,17 @@
 import { produce, type Draft } from 'immer';
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useUI } from '@/components/Overlay';
-import { useT } from '@/i18n';
+import { useT, type Key } from '@/i18n';
 import { ApiError, LIVE } from '@/lib/api';
 import { registerStoreRefresh } from '@/lib/refresh';
 import { confirm } from '@/lib/confirm';
 import { addMemberLive, blockPerson, createPost, createReply, deleteAccountLive, deletePost, deleteReply, fetchCommunity, fetchPost, readAllNotifsLive, readNotifLive, removeMemberLive, reportItem, saveSettings, sendGratitudeLive, SERVER_NOTIF_BASE, setReaction, suggestLive, unblockPerson } from '@/lib/live2';
-import { ackLive, addIssueUpdateLive, askAssistant, clearAssistantHistory, confirmIssueLive, createCommonIssueLive, createIssueLive, fetchAll, logAssistantTurns, reopenIssueLive, type HistoryTurn, rsvpLive, unrsvpLive, voteLive } from '@/lib/live';
+import { ackLive, addIssueUpdateLive, askAssistant, clearAssistantHistory, confirmIssueLive, createCommonIssueLive, createIssueLive, fetchAnnouncements, fetchEvents, fetchIssues, fetchPolls, logAssistantTurns, reopenIssueLive, type HistoryTurn, rsvpLive, unrsvpLive, voteLive } from '@/lib/live';
 import { cancelEventReminder, scheduleEventReminder } from '@/lib/notify';
 import { deleteStore, loadStore, saveStore } from '@/lib/persist';
 import { useAuth } from './auth';
 import { todayStamp } from './dates';
-import { firstState, initialChat, ME, resetIdentity, pollClosed, type Member, type Priority, type NotifPrefs, type PrivacyPrefs, type State, type Suggestion, type TryKey } from './data';
+import { firstState, initialChat, ME, resetIdentity, pollClosed, type Member, type Priority, type NotifPrefs, type PrivacyPrefs, type State, type Suggestion, type SyncPart, type TryKey } from './data';
 import { aiReply, attachChatPhoto, handledInApp, audit, checkSafety, createIssue, holdForReview, notify, type Safety } from './logic';
 
 export const TRY_TOTAL = 7;
@@ -53,7 +53,7 @@ function useActions(update: (fn: (d: Draft<State>) => void) => void, ref: { curr
             setTimeout(() => onFlagged?.({ level: verdict.level, words: verdict.words }), 0);
             return;
           }
-          d.chat.log.push({ who: 'ai', text: r.text, src: r.source, chips: r.chips ?? ['Report an issue'], calls: r.calls, link: r.link, offer: r.offer });
+          d.chat.log.push({ who: 'ai', text: r.text, src: r.source, chips: r.chips ?? ['Report an issue'], calls: r.calls, link: r.link, offer: r.offer, sos: r.sos });
           d.tried.ask = true;
           // the server keeps the question (unless assistant history is off), so the impact figures move with it
           if (d.settings.privacy.aiHistory && d.me.chats !== null) { d.me.chats++; d.me.pastChats = [text, ...d.me.pastChats].slice(0, 4); }
@@ -624,17 +624,45 @@ export function StoreProvider({ initial = firstState, children }: { initial?: St
   }, []);
   const { toast, confetti } = useUI();
   const { t } = useT();
-  const offlineMsg = useRef('');
-  useLayoutEffect(() => { offlineMsg.current = t('live.offline'); });
-  /** LIVE: issues, notices, events and polls come from the server; the saved copy is what shows while offline */
+  // read through refs: the sync callback is made once, the language can change
+  const words = useRef<{ offline: string; unreadable: string; failed: (what: string) => string; part: (p: SyncPart) => string }>({ offline: '', unreadable: '', failed: () => '', part: () => '' });
+  useLayoutEffect(() => {
+    words.current = { offline: t('live.offline'), unreadable: t('live.unreadable'), failed: what => t('live.someFailed', { what }), part: p => t(('live.part.' + p) as Key) };
+  });
+  /**
+   * LIVE: issues, notices, events, polls and the community feed come from the server — each on its own, so one
+   * failure can't empty the rest. Whatever loaded is shown; whatever failed keeps its last loaded copy and records
+   * why, and its screen says so (SyncNotice) instead of claiming there is nothing.
+   */
   const sync = useCallback(async () => {
     if (!LIVE || !holder.current) return;
     const forWhom = holder.current;
-    try {
-      const [fresh, com] = await Promise.all([fetchAll(), fetchCommunity()]);
-      if (holder.current !== forWhom) return; // signed out, or someone else signed in, while it loaded
-      setState(s => ({
-        ...s, ...fresh,
+    // why a list failed, in words a resident can act on; a mapping fault is not "can't reach the server"
+    const why = (part: SyncPart, e: unknown) => {
+      if (e instanceof ApiError) return e.status === 0 ? words.current.offline : e.message;
+      console.warn(`[sync] ${part}: the server's answer couldn't be read`, e);
+      return words.current.unreadable;
+    };
+    const [issues, announcements, events, polls, community] = await Promise.allSettled([fetchIssues(), fetchAnnouncements(), fetchEvents(), fetchPolls(), fetchCommunity()]);
+    if (holder.current !== forWhom) return; // signed out, or someone else signed in, while it loaded
+    const now = new Date().toISOString();
+    const results = { issues, announcements, events, polls, community } as const;
+    const failed = (Object.keys(results) as SyncPart[]).filter(p => results[p].status === 'rejected');
+    setState(s => {
+      const sync = { ...s.sync };
+      for (const p of Object.keys(results) as SyncPart[]) {
+        const r = results[p];
+        sync[p] = r.status === 'fulfilled' ? { at: now, error: null } : { at: s.sync[p]?.at ?? null, error: why(p, r.reason) };
+      }
+      let next: State = { ...s, sync };
+      if (issues.status === 'fulfilled') next = { ...next, issues: issues.value };
+      if (announcements.status === 'fulfilled') next = { ...next, announcements: announcements.value };
+      if (events.status === 'fulfilled') next = { ...next, events: events.value.events, pastEvents: events.value.pastEvents };
+      if (polls.status === 'fulfilled') next = { ...next, polls: polls.value };
+      if (community.status !== 'fulfilled') return next;
+      const com = community.value;
+      return {
+        ...next,
         // keep threads already opened: the feed only carries counts
         discussions: com.discussions.map(p => { const old = s.discussions.find(x => x.id === p.id); return old?.thread ? { ...p, thread: old.thread } : p; }),
         gratitudes: com.gratitudes, settings: com.settings, family: com.family, suggestions: com.suggestions, blocked: com.blocked,
@@ -644,10 +672,10 @@ export function StoreProvider({ initial = firstState, children }: { initial?: St
         // the server's notifications, plus the ones this phone raised itself ("ISS-1044 created") since signing in
         notifs: [...s.notifs.filter(n => n.id >= 7 && n.id < SERVER_NOTIF_BASE), ...com.notifs],
         modqueue: [], audit: [],
-      }));
-    } catch (e) {
-      if (holder.current === forWhom) toast(e instanceof ApiError ? e.message : offlineMsg.current, 'cloud-offline');
-    }
+      };
+    });
+    // one toast naming what didn't load; each screen also shows it, with the reason and Retry
+    if (failed.length) toast(words.current.failed(failed.map(words.current.part).join(', ')), 'cloud-offline');
   }, [toast]);
   const actions = useActions(update, ref, release, wipe, sync);
   // a pull-to-refresh on any screen reads everything again
@@ -666,7 +694,6 @@ export function StoreProvider({ initial = firstState, children }: { initial?: St
 
   const ready = !!owner && loadedFor === owner;
   // sync only sets state after the network answers, never during the effect itself
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (ready) sync(); }, [ready, sync]);
   const value = useMemo(() => ({ state, actions, ready }), [state, actions, ready]);
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;

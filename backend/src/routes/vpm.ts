@@ -31,6 +31,9 @@ export const vpmRoutes = ({ config, db }: Deps): FastifyPluginAsync => async app
       emergencies: sql<number>`(select count(*)::int from issues i where i.association_id = ${associations.id} and i.priority = 'Emergency' and i.status not in ('Resolved','Closed'))`,
       overdue: sql<number>`(select count(*)::int from issues i where i.association_id = ${associations.id} and i.status not in ('Resolved','Closed','On Hold') and i.sla_due_at < now())`,
       approvals: sql<number>`(select count(*)::int from issues i where i.association_id = ${associations.id} and i.approval = 'pending' and i.status not in ('Resolved','Closed'))`,
+      // requests that need the manager, each counted once: an emergency, not yet picked up, or past its response time
+      needs: sql<number>`(select count(*)::int from issues i where i.association_id = ${associations.id} and i.status not in ('Resolved','Closed')
+        and (i.priority = 'Emergency' or i.status = 'Submitted' or (i.sla_due_at < now() and i.status <> 'On Hold')))`,
       resolvedWeek: sql<number>`(select count(*)::int from issue_events e join issues i on i.id = e.issue_id where i.association_id = ${associations.id} and e.status = 'Resolved' and e.created_at > now() - interval '7 days')`,
       homes: sql<number>`(select count(*)::int from units u where u.association_id = ${associations.id})`,
       residents: sql<number>`(select count(distinct m.user_id)::int from unit_members m join units u on u.id = m.unit_id where u.association_id = ${associations.id} and m.status = 'active')`,
@@ -54,7 +57,18 @@ export const vpmRoutes = ({ config, db }: Deps): FastifyPluginAsync => async app
       .where(and(inArray(issues.associationId, rows.map(r => r.id)), sql`${issues.status} not in ('Resolved','Closed')`,
         sql`(${issues.priority} = 'Emergency' or ${issues.status} = 'Submitted' or (${issues.slaDueAt} < now() and ${issues.status} <> 'On Hold'))`))
       .orderBy(sql`case when ${issues.priority} = 'Emergency' then 0 when ${issues.slaDueAt} < now() then 1 else 2 end`, issues.slaDueAt).limit(6);
-    return { user, societies, attention: attention.map(({ number, ...a }) => ({ ...a, ref: 'ISS-' + number })) };
+    // hours on site this India-time week (Monday to Sunday), across the manager's societies; a visit still open counts to now
+    let week: { hours: number; visits: number } | null = null;
+    try {
+      const rowsW = ((await db.execute(sql`
+        select coalesce(sum(greatest(0, extract(epoch from coalesce(v.checked_out_at,
+          -- a visit not finished counts up to now, but never past its planned end — a forgotten check-out doesn't run on for days
+          least(now(), greatest(v.checked_in_at, ((v.date || ' ' || v."end")::timestamp at time zone 'Asia/Kolkata')))) - v.checked_in_at))) / 3600, 0)::float as hours, count(*)::int as visits
+        from site_visits v where v.association_id in (${ids}) and v.checked_in_at is not null
+          and (v.checked_in_at at time zone 'Asia/Kolkata')::date >= date_trunc('week', (now() at time zone 'Asia/Kolkata'))::date`)) as unknown as { rows: { hours: number; visits: number }[] }).rows;
+      week = { hours: Math.round((rowsW[0]?.hours ?? 0) * 10) / 10, visits: rowsW[0]?.visits ?? 0 };
+    } catch { week = null; }
+    return { user, societies, week, band: { min: 9, max: 12 }, attention: attention.map(({ number, ...a }) => ({ ...a, ref: 'ISS-' + number })) };
   });
 
   /* =============== the operator, in the Owner Portal =============== */

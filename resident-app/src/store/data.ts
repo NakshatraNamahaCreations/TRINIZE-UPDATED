@@ -45,6 +45,8 @@ export type IssueUpdate = { text: string; when: string; photo?: string };
 export type Issue = {
   id: string; title: string; cat: string; loc: string; pri: Priority; by: string; unit: string;
   mine?: boolean; when: string; status: IssueStatus; vendor: string; sla: string;
+  /** when it was raised (ISO); `when` is the same as text, frozen at load — shown from `at` when there is one */
+  at?: string;
   slaState: 'ok' | 'over' | 'met'; tl: TimelineStep[];
   /** admin/vendor-only notes — never rendered in the resident app */
   internal: { w: string; n: string }[];
@@ -68,7 +70,7 @@ export type NotifPrefs = Record<'announcements' | 'events' | 'polls' | 'discussi
 export type PrivacyPrefs = Record<'showFlat' | 'showPhone' | 'aiHistory', boolean>;
 export type IssueDraft = { title: string; desc: string; cat: string; loc: string; pri: Priority; photo?: string };
 export type ChatMsg =
-  | { who: 'ai'; text: string; src?: string | null; chips?: string[]; calls?: [label: string, phone: string][]; link?: { label: string; href: string }; offer?: 'ask_office' }
+  | { who: 'ai'; text: string; src?: string | null; chips?: string[]; calls?: [label: string, phone: string][]; link?: { label: string; href: string }; offer?: 'ask_office'; sos?: boolean }
   | { who: 'me'; text: string }
   | { who: 'preview'; draft: IssueDraft };
 export type ChatMode = 'idle' | 'issue.desc' | 'issue.loc' | 'issue.urg' | 'issue.photo' | 'issue.preview';
@@ -99,7 +101,14 @@ export const initialChat = (): Chat => ({
   mode: 'idle', draft: {}, busy: false, creating: false, startedAt: new Date().toISOString(),
 });
 
+/** the lists that come from the server, each loaded on its own */
+export type SyncPart = 'issues' | 'announcements' | 'events' | 'polls' | 'community';
+/** `at`: when it last loaded from the server (null = never on this phone); `error`: why the latest try failed (null = it worked) */
+export type SyncStatus = { at: string | null; error: string | null };
+
 export const initialState = {
+  /** LIVE: how each list from the server last went — an empty list only means "nothing" once it has loaded */
+  sync: {} as Partial<Record<SyncPart, SyncStatus>>,
   /** society-admin controlled switches; the resident app obeys them */
   ai: {
     qna: true, issueCreate: true, toneRewrite: true, summaries: true,

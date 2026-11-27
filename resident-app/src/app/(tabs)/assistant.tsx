@@ -219,6 +219,18 @@ export default function Assistant() {
                   </View>
                 )}
               </View>
+              {m.sos && (
+                // first and largest: one tap to the SOS screen, which alerts the security team at the gate
+                <Pressable onPress={() => router.navigate('/emergency')} accessibilityRole="button" accessibilityLabel={t('ai.sos')}
+                  style={({ pressed }) => [s.sosBtn, pressed && { opacity: 0.85 }]}>
+                  <Icon name="alert-circle" size={22} color="#fff" />
+                  <View style={{ flex: 1 }}>
+                    <Txt w={800} style={{ fontSize: 15, color: '#fff' }}>{t('ai.sos')}</Txt>
+                    <Txt style={{ fontSize: 12, color: 'rgba(255,255,255,.9)' }}>{t('ai.sosSub')}</Txt>
+                  </View>
+                  <Icon name="chevron-forward" size={18} color="#fff" />
+                </Pressable>
+              )}
               {!!m.calls?.length && (
                 <View style={s.calls}>
                   {m.calls.map(([label, phone]) => (
@@ -290,6 +302,7 @@ const s = StyleSheet.create({
   prevPhoto: { width: '100%', height: 130, borderRadius: 10, marginTop: 8, backgroundColor: C.dimBg },
   calls: { gap: 6, alignSelf: 'stretch', maxWidth: '84%' },
   callBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.bad, borderRadius: 12, paddingHorizontal: 14, minHeight: 48 },
+  sosBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, alignSelf: 'stretch', maxWidth: '84%', backgroundColor: '#B42318', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, minHeight: 60 },
   linkBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: C.ai, borderRadius: 12, paddingHorizontal: 14, minHeight: 44 },
   offerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', backgroundColor: '#fff', borderWidth: 1.5, borderColor: C.ai, borderRadius: 12, paddingHorizontal: 14, minHeight: 44, maxWidth: '90%' },
   prevVal: { flexDirection: 'row', gap: 4, alignItems: 'center', flex: 1, justifyContent: 'flex-end' },

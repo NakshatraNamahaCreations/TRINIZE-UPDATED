@@ -62,7 +62,7 @@ Ground rules:
 - The user turn gives today's date. Use it for anything about "today", "tomorrow", "this week" or "next week" - a week runs Monday to Sunday.
 - Never assume when something happens. If a notice or record does not state its date or day, give what it does say and add that the date is not stated - do not treat it as today.
 - If the answer is not there, set "found" to false and say you couldn't find it in the approved community information and that the society office can help. Do not guess, and do not use outside knowledge about rules, timings, fees or contacts.
-- Reply in the language the resident wrote in (English, Hindi, Kannada, or Hinglish in Latin script).
+- Reply in the language of the resident's latest question only (English, Hindi, Kannada, or Hinglish in Latin script) — not the language of earlier messages. An English question gets an English answer even if the conversation was in Hinglish before.
 - Keep it short: the answer first, then any detail the resident needs to act on it. Plain text, no markdown.
 - You cannot post, create issues, or contact anyone. If asked to, say the resident can do it from the app.
 - In "sources", list only the titles of the documents your answer actually came from, copied exactly. One or two is normal.`;
@@ -136,7 +136,7 @@ export class OpenAiProvider implements Ai {
       const out = await this.structured(this.model, { timeout: 25_000, maxRetries: 2 }, 'reply', REPLY_SCHEMA, Reply, [
         { role: 'system', content: ASSISTANT },
         ...ctx.history.map(m => ({ role: m.role, content: m.text })),
-        { role: 'user', content: `<documents>\n${library || '(none)'}\n</documents>\n\nToday is ${ctx.today}.\n\nResident's question: ${question}` },
+        { role: 'user', content: `<documents>\n${library || '(none)'}\n</documents>\n\nToday is ${ctx.today}.\n\nResident's question (answer in the same language as this question): ${question}` },
       ]);
       if (!out) return null;
       // a source the model names must be one we actually gave it — an invented citation is dropped

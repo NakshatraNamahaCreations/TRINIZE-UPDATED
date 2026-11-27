@@ -46,7 +46,9 @@ export const emergencyRoutes = ({ config, db }: Deps): FastifyPluginAsync => asy
     const c = await caller(req);
     const numbers = await db.select({ name: contacts.name, role: contacts.role, phone: contacts.phone }).from(contacts).where(and(eq(contacts.associationId, c.associationId), eq(contacts.group, 'emergency'))).orderBy(asc(contacts.position));
     const open = await incidentOut(c.associationId, c.role === 'guard' ? inArray(incidents.status, ['Open', 'Acknowledged']) : and(eq(incidents.raisedBy, c.userId), inArray(incidents.status, ['Open', 'Acknowledged'])));
-    return { contacts: numbers, kinds: INCIDENT_KINDS, open };
+    // 112 reaches police, fire and ambulance anywhere in India — always offered, whatever the society has listed
+    const contactsOut = numbers.some(n => n.phone.replace(/\s/g, '') === '112') ? numbers : [...numbers, { name: 'National emergency', role: 'Police, fire and ambulance', phone: '112' }];
+    return { contacts: contactsOut, kinds: INCIDENT_KINDS, open };
   });
 
   /** SOS: security, the office and the committee are told at once, and it goes on the incident log */

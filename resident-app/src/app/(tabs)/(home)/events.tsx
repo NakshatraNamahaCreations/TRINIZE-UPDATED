@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useUI } from '@/components/Overlay';
+import { SyncNotice, useLoaded } from '@/components/SyncNotice';
 import { Btn, Card, EmptyState, Header, IconTile, Meta, Pill, Row, Screen, Sect, Segmented, stagger, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
 import { CalendarForm } from '@/lib/native';
@@ -12,6 +13,7 @@ import { C } from '@/theme';
 
 export default function Events() {
   const { state, actions } = useStore();
+  const loaded = useLoaded('events');
   const { toast, openSheet } = useUI();
   const { t, tx } = useT();
   // an event notification opens this list on its event (?focus=E-52)
@@ -50,6 +52,7 @@ export default function Events() {
 
   return (
     <Screen scrollRef={scrollRef} header={<Header title={t('events.title')} back="/" bell />}>
+      <SyncNotice part="events" />
       <Segmented items={[['up', t('events.up')], ['past', t('events.past')]]} value={tab} onChange={setTab} />
       {tab === 'past' ? (
         past.length ? past.map((e, i) => (
@@ -63,10 +66,10 @@ export default function Events() {
               </View>
             </View>
           </Card>
-        )) : <EmptyState icon="calendar-outline" title={t('events.noPast')} />
+        )) : loaded && <EmptyState icon="calendar-outline" title={t('events.noPast')} />
       ) : (
         <>
-          {!upcoming.length && <EmptyState icon="calendar-outline" title={t('events.noUp')} />}
+          {!upcoming.length && loaded && <EmptyState icon="calendar-outline" title={t('events.noUp')} />}
           {upcoming.map((e, i) => {
             const left = e.cap - e.going;
             const full = left <= 0;

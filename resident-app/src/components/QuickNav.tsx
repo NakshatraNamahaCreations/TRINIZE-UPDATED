@@ -20,7 +20,9 @@ const ITEMS: Item[] = [
   // emergency help needs the server; the demo build offers events in its place
   LIVE ? { ic: 'alert-circle', l: 'sos.title', to: '/emergency', bg: '#FDE9E7', fg: C.bad } : { ic: 'calendar-number', l: 'fab.events', to: '/events', bg: '#FEF0DC', fg: '#B54708' },
 ];
-const SIZE = 54, EDGE = 10, MOVED = 6;
+// docked: about half of the button tucks behind the screen's edge, so it never covers what's on the screen (N-10)
+const SIZE = 54, DOCK = 24, MOVED = 6;
+const leftX = () => -DOCK, rightX = (w: number) => w - SIZE + DOCK;
 
 /**
  * A floating quick-menu button for the resident app. It sits at the right edge, can be dragged anywhere
@@ -33,16 +35,18 @@ export function QuickNav() {
   const { width: W, height: H } = useWindowDimensions();
   const [open, setOpen] = useState(false);
   const [typing, setTyping] = useState(false);
+  // which edge it is docked on: the icon sits in the half that shows
+  const [side, setSide] = useState<'left' | 'right'>('right');
 
   // where the button rests and the area it may move in; the gesture handler is made once and reads them from here
-  const [geo] = useState(() => ({ W, H, minY: 0, maxY: H, x: W - SIZE - EDGE, y: Math.round(H * 0.58) }));
+  const [geo] = useState(() => ({ W, H, minY: 0, maxY: H, x: rightX(W), y: Math.round(H * 0.58) }));
   const [pos] = useState(() => new Animated.ValueXY({ x: geo.x, y: geo.y }));
   const [menu] = useState(() => new Animated.Value(0));
 
   // on start and after a rotation: keep the button on its side and on screen
   useEffect(() => {
     const minY = insets.top + 64, maxY = H - insets.bottom - 150;
-    const x = geo.x + SIZE / 2 < W / 2 ? EDGE : W - SIZE - EDGE, y = Math.min(Math.max(geo.y, minY), maxY);
+    const x = geo.x + SIZE / 2 < W / 2 ? leftX() : rightX(W), y = Math.min(Math.max(geo.y, minY), maxY);
     Object.assign(geo, { W, H, minY, maxY, x, y });
     pos.setValue({ x, y });
   }, [W, H, insets.top, insets.bottom, geo, pos]);
@@ -64,9 +68,10 @@ export function QuickNav() {
     loadQuickNav().then(spot => {
       if (!live || !spot || (spot.side !== 'left' && spot.side !== 'right') || typeof spot.down !== 'number') return;
       const down = Math.min(Math.max(spot.down, 0), 1);
-      const x = spot.side === 'left' ? EDGE : geo.W - SIZE - EDGE, y = Math.round(geo.minY + down * (geo.maxY - geo.minY));
+      const x = spot.side === 'left' ? leftX() : rightX(geo.W), y = Math.round(geo.minY + down * (geo.maxY - geo.minY));
       Object.assign(geo, { x, y });
       pos.setValue({ x, y });
+      setSide(spot.side);
     }).catch(() => {});
     return () => { live = false; };
   }, [geo, pos]);
@@ -81,10 +86,11 @@ export function QuickNav() {
       // barely moved: that was a tap
       if (Math.abs(g.dx) < MOVED && Math.abs(g.dy) < MOVED) { pos.setValue({ x: geo.x, y: geo.y }); setOpen(true); return; }
       // settle on the nearer side, inside the screen
-      geo.x = geo.x + g.dx + SIZE / 2 < geo.W / 2 ? EDGE : geo.W - SIZE - EDGE;
+      geo.x = geo.x + g.dx + SIZE / 2 < geo.W / 2 ? leftX() : rightX(geo.W);
       geo.y = Math.min(Math.max(geo.y + g.dy, geo.minY), geo.maxY);
       Animated.spring(pos, { toValue: { x: geo.x, y: geo.y }, useNativeDriver: false, friction: 7 }).start();
-      saveQuickNav({ side: geo.x === EDGE ? 'left' : 'right', down: geo.maxY > geo.minY ? (geo.y - geo.minY) / (geo.maxY - geo.minY) : 0.5 });
+      setSide(geo.x < geo.W / 2 ? 'left' : 'right');
+      saveQuickNav({ side: geo.x < geo.W / 2 ? 'left' : 'right', down: geo.maxY > geo.minY ? (geo.y - geo.minY) / (geo.maxY - geo.minY) : 0.5 });
     },
     onPanResponderTerminate: () => { pos.flattenOffset(); Animated.spring(pos, { toValue: { x: geo.x, y: geo.y }, useNativeDriver: false }).start(); },
   }));
@@ -121,7 +127,7 @@ export function QuickNav() {
           accessible accessibilityRole="button" accessibilityLabel={t('fab.menu')} accessibilityHint={t('fab.hint')} onAccessibilityTap={() => setOpen(true)}
           style={[s.fab, { transform: pos.getTranslateTransform() }]}
         >
-          <View style={s.fabRing}><Icon name="apps" size={22} color="#fff" /></View>
+          <View style={[s.fabRing, side === 'left' ? { alignItems: 'flex-end', paddingRight: 7 } : { alignItems: 'flex-start', paddingLeft: 7 }]}><Icon name="apps" size={20} color="#fff" /></View>
         </Animated.View>
       )}
     </>

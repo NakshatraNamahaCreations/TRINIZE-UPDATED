@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { Card, EmptyState, Header, Meta, Screen, Txt } from '@/components/ui';
 import { useT } from '@/i18n';
+import { LIVE } from '@/lib/api';
 import { SOCIETY } from '@/store/data';
 import { C } from '@/theme';
 
@@ -10,14 +11,17 @@ type Section = [heading: string, body: string];
 
 /* Plain-language drafts that describe what this build actually does. They must be reviewed by
    Trinize's legal team (and hosted on the web for the store listings) before a public launch. */
-const UPDATED = '16 Nov 2026';
+const UPDATED = '27 Nov 2026';
 
 const PRIVACY: Section[] = [
   ['What we collect', 'Your mobile number (to sign you in with a one-time code), your flat and role in the society, and what you add in the app: issues and their photos, posts, replies, reactions, poll votes, event RSVPs, gratitude notes and questions you ask the Community Assistant.'],
   ['Why we use it', `To run ${SOCIETY.name}'s community app: showing notices, routing your issues to the society office and its vendors, counting votes once per flat, and keeping discussions safe. We do not sell your data or show ads.`],
   ['Who can see it', 'Other residents see your posts, replies and your name; your flat number only if you allow it in Privacy settings. The society office sees issues you raise and anything held for review. Gratitude notes are private to the person you thank. Assistant chats are private to you.'],
-  ['Where it is kept', 'In this build your data is kept on this phone, separately for each mobile number. When the app is connected to Trinize servers it will be stored there, in India, and the phone copy becomes a cache.'],
-  ['Your choices', 'Turn off assistant history, hide your flat number or phone, and control notifications from Profile. You can ask for a copy of your data from Profile → Privacy. To delete your account and its data, contact your society office.'],
+  // what this build actually does: the connected app keeps your data on Trinize's servers; the demo build only on the phone
+  ['Where it is kept', LIVE
+    ? 'Your data is stored on Trinize’s servers in India and sent over an encrypted connection. The app keeps a copy on this phone so it opens quickly and works when you are offline; signing out or deleting your account removes it.'
+    : 'This is a demo build: your data is kept only on this phone, separately for each mobile number, and is never sent anywhere.'],
+  ['Your choices', 'Turn off assistant history, hide your flat number or phone, and control notifications from Profile. You can ask for a copy of your data from Profile → Privacy. To delete your account and its data, go to Profile → Account status → Delete account; you can also ask your society office to do it for you.'],
   ['Your rights', 'Under India’s Digital Personal Data Protection Act, 2023 you can access, correct and erase your personal data and withdraw consent. Contact your society office and we will respond within 30 days.'],
 ];
 

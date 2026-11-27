@@ -133,8 +133,10 @@ export function Managers() {
   // or else the first listed (the server's rule — demo data carries no flag)
   const sharing = id => vpms.filter(x => x.societies.some(s => s.id === id));
   const isPrimary = (v, s) => s.primary ?? sharing(s.id)[0]?.id === v.id;
-  const covered = new Set(vpms.flatMap(v => v.societies.map(s => s.id)));
-  const uncovered = ASSOC.filter(a => a.state !== 'Suspended' && !covered.has(a.id));
+  // both figures count the same societies: every one on the books, covered or not
+  const assigned = new Set(vpms.flatMap(v => v.societies.map(s => s.id)));
+  const covered = new Set(ASSOC.filter(a => assigned.has(a.id)).map(a => a.id));
+  const uncovered = ASSOC.filter(a => !assigned.has(a.id));
   const add = () => openModal(<AddManager />);
 
   return (

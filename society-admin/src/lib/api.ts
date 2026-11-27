@@ -62,7 +62,19 @@ function refresh(): Promise<boolean> {
   return refreshing;
 }
 
-export async function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, opts: { auth?: boolean } = {}): Promise<T> {
+/** reads already on their way: a second identical read at the same moment waits for the first instead of asking again (S-07) */
+const inflight = new Map<string, Promise<unknown>>();
+export function api<T = unknown>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, opts: { auth?: boolean } = {}): Promise<T> {
+  if (method !== 'GET' || body !== undefined) return send<T>(method, path, body, opts);
+  const key = ((opts.auth ?? true) ? 'a' : 'n') + path;
+  const going = inflight.get(key);
+  if (going) return going as Promise<T>;
+  const p = send<T>(method, path, body, opts).finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+async function send<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown, opts: { auth?: boolean } = {}): Promise<T> {
   const auth = opts.auth ?? true;
   let res: Response;
   try {
