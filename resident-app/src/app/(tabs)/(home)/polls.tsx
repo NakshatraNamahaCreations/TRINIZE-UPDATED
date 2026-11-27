@@ -40,7 +40,7 @@ export default function Polls() {
       <SyncNotice part="polls" />
       {/* was a blank screen when there were no polls */}
       {!state.polls.length && loaded && <EmptyState icon="bar-chart-outline" title={t('polls.empty.t')} body={t('polls.empty.b')} />}
-      {state.polls.map((p, idx) => {
+      {[...state.polls].sort((a, b) => Number(pollClosed(a)) - Number(pollClosed(b))).map((p, idx) => {
         const total = p.opts.reduce((a, o) => a + o.v, 0);
         const voted = !!p.mine;
         // closes on its end date, not only when someone remembers to close it

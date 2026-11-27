@@ -73,7 +73,8 @@ export const opsRoutes = ({ config, db, messenger }: Deps): FastifyPluginAsync =
       const overdue = mine.filter(i => i.paid < i.amount && i.dueAt.getTime() < now);
       return {
         id: a.id, name: a.name, short: a.short, city: a.city, kind: s.kind, plan: s.plan, billing: s.billing, state: s.state, pay,
-        plots: s.plots, owners: s.owners, adoption, usage: series.slice(-12), annual: s.annualAmount, mrr: Math.round(s.annualAmount / 12),
+        // homes with a resident on the app, counted (QA O-02) — the stored figure was a seed number that never moved
+        plots: s.plots, owners: withResident, adoption, usage: series.slice(-12), annual: s.annualAmount, mrr: Math.round(s.annualAmount / 12),
         renewsAt: s.renewsAt, daysToRenewal: calendarDaysTo(s.renewsAt, now), openTickets: open.length,
         overdue: { count: overdue.length, amount: overdue.reduce((n, i) => n + (i.amount - i.paid), 0) },
         onApp: { units: b.onApp.find(x => x.associationId === a.id)?.n ?? 0, residents: b.people.find(x => x.associationId === a.id)?.n ?? 0 },

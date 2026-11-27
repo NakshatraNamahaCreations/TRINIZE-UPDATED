@@ -87,7 +87,7 @@ export function sendGratitudeLive(text: string, cat: string, to: string) {
 }
 
 /* ---------- notifications ---------- */
-type ApiNotif = { id: string; kind: 'announcements' | 'events' | 'polls' | 'discussions' | 'gratitude' | 'issues'; title: string; body: string; href: string | null; read: boolean; createdAt: string };
+type ApiNotif = { id: string; kind: 'announcements' | 'events' | 'polls' | 'discussions' | 'gratitude' | 'issues' | 'visitors' | 'messages' | 'payments'; title: string; body: string; href: string | null; read: boolean; createdAt: string };
 const LOOK: Record<ApiNotif['kind'], [IconName, string, string, NotifTarget]> = {
   announcements: ['megaphone-outline', '#E3F3FC', '#0369A1', 'home'],
   events: ['calendar-outline', '#E4F7EE', '#067647', 'events'],
@@ -95,7 +95,12 @@ const LOOK: Record<ApiNotif['kind'], [IconName, string, string, NotifTarget]> = 
   discussions: ['chatbubbles-outline', '#F1ECFE', '#7C55F7', 'home'],
   gratitude: ['heart-outline', '#F1ECFE', '#7C55F7', 'home'],
   issues: ['construct-outline', '#FEF0DC', '#B54708', 'issues'],
+  visitors: ['shield-checkmark-outline', '#E3F3FC', '#0369A1', 'home'],
+  messages: ['mail-outline', '#EEF0FE', '#4F46E5', 'home'],
+  payments: ['card-outline', '#E4F7EE', '#067647', 'home'],
 };
+/** a kind added on the server after this build: shown plainly rather than failing the whole community sync (QA A-01) */
+const PLAIN: [IconName, string, string, NotifTarget] = ['notifications-outline', '#EEF1F6', '#54525E', 'home'];
 /** server notifications get ids from here up, clear of the ones the app raises itself */
 export const SERVER_NOTIF_BASE = 100_000;
 const notifIds = new Map<number, string>();
@@ -105,7 +110,7 @@ export async function fetchNotifs(): Promise<Notif[]> {
   return list.map((n, i) => {
     const id = SERVER_NOTIF_BASE + i;
     notifIds.set(id, n.id);
-    const [icon, c, tc, goTo] = LOOK[n.kind];
+    const [icon, c, tc, goTo] = LOOK[n.kind] ?? PLAIN;
     return { id, icon, c, tc, t: n.title, s: n.body, when: ago(n.createdAt), unread: !n.read, goTo, href: n.href ?? undefined };
   });
 }
@@ -147,11 +152,16 @@ export const isMe = (id: string) => id === myId;
 
 export type Impact = { days: number; streak: number; best: number; last14: boolean[]; chats: number; recentQuestions: string[] };
 
-/** The community side, in one go — joins fetchAll() from live.ts on every sync. */
+/** one part of the community sync failing leaves that part as it was, instead of failing all of them (QA A-01) */
+const soft = <T,>(name: string, p: Promise<T>): Promise<T | undefined> =>
+  p.catch((e: unknown) => { console.warn(`[sync] community/${name} failed`, e); return undefined; });
+
+/** The community side, in one go — joins fetchAll() from live.ts on every sync. Each part is kept separate: undefined = didn't load. */
 export async function fetchCommunity() {
   await fetchMe(); // first: "mine" checks across the screens compare against ME
   const [discussions, gratitudes, notifs, settings, family, suggestions, directory, blocked, impact] = await Promise.all([
-    fetchPosts(), fetchGratitudes(), fetchNotifs(), fetchSettings(), fetchFamily(), fetchSuggestions(), fetchDirectory(), fetchBlocked(),
+    soft('posts', fetchPosts()), soft('gratitudes', fetchGratitudes()), soft('notifications', fetchNotifs()), soft('settings', fetchSettings()),
+    soft('family', fetchFamily()), soft('suggestions', fetchSuggestions()), soft('directory', fetchDirectory()), soft('blocked', fetchBlocked()),
     // asking also marks today as a day the app was opened
     api<Impact>('POST', '/v1/me/impact').catch(() => null),
   ]);

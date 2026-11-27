@@ -331,6 +331,7 @@ export const en = {
   'polls.closed': 'Closed',
   'polls.active': 'Active',
   'polls.votes': '{n} votes',
+  'polls.votes.one': '1 vote',
   'polls.youVoted': ' · you voted — one vote per unit',
   'polls.after': 'Results are shown after you vote.',
 

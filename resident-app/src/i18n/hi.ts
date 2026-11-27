@@ -317,6 +317,7 @@ export const hi: Record<Key, string> = {
   'polls.closed': 'बंद',
   'polls.active': 'सक्रिय',
   'polls.votes': '{n} वोट',
+  'polls.votes.one': '1 वोट',
   'polls.youVoted': ' · आपने वोट दिया — हर यूनिट का एक वोट',
   'polls.after': 'वोट देने के बाद नतीजे दिखेंगे।',
 

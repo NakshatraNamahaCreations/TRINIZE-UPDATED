@@ -317,6 +317,7 @@ export const kn: Record<Key, string> = {
   'polls.closed': 'ಮುಕ್ತಾಯ',
   'polls.active': 'ಸಕ್ರಿಯ',
   'polls.votes': '{n} ಮತಗಳು',
+  'polls.votes.one': '1 ಮತ',
   'polls.youVoted': ' · ನೀವು ಮತ ಹಾಕಿದ್ದೀರಿ — ಪ್ರತಿ ಮನೆಗೆ ಒಂದು ಮತ',
   'polls.after': 'ನೀವು ಮತ ಹಾಕಿದ ನಂತರ ಫಲಿತಾಂಶ ಕಾಣಿಸುತ್ತದೆ.',
 

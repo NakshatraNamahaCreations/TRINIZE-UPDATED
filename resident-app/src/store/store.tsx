@@ -664,13 +664,14 @@ export function StoreProvider({ initial = firstState, children }: { initial?: St
       return {
         ...next,
         // keep threads already opened: the feed only carries counts
-        discussions: com.discussions.map(p => { const old = s.discussions.find(x => x.id === p.id); return old?.thread ? { ...p, thread: old.thread } : p; }),
-        gratitudes: com.gratitudes, settings: com.settings, family: com.family, suggestions: com.suggestions, blocked: com.blocked,
-        directory: com.directory, who: com.who,
+        // a part that didn't load keeps what the phone had (see fetchCommunity)
+        discussions: com.discussions ? com.discussions.map(p => { const old = s.discussions.find(x => x.id === p.id); return old?.thread ? { ...p, thread: old.thread } : p; }) : s.discussions,
+        gratitudes: com.gratitudes ?? s.gratitudes, settings: com.settings ?? s.settings, family: com.family ?? s.family, suggestions: com.suggestions ?? s.suggestions, blocked: com.blocked ?? s.blocked,
+        directory: com.directory ?? s.directory, who: com.who,
         // the resident's own figures: days the app was opened, streaks, and questions put to the assistant
         me: com.impact ? { days: com.impact.days, streak: com.impact.streak, best: com.impact.best, last14: com.impact.last14, chats: com.impact.chats, pastChats: com.impact.recentQuestions } : s.me,
         // the server's notifications, plus the ones this phone raised itself ("ISS-1044 created") since signing in
-        notifs: [...s.notifs.filter(n => n.id >= 7 && n.id < SERVER_NOTIF_BASE), ...com.notifs],
+        notifs: com.notifs ? [...s.notifs.filter(n => n.id >= 7 && n.id < SERVER_NOTIF_BASE), ...com.notifs] : s.notifs,
         modqueue: [], audit: [],
       };
     });
